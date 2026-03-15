@@ -1,5 +1,4 @@
-\---
-
+---
 name: mauireactor
 description: Develop MauiReactor applications - a declarative UI component framework for .NET MAUI. Use this skill whenever users create, debug, or optimize MauiReactor components. Essential for: building stateless/stateful components, property-based animations (WithAnimation), AnimationController sequences, component lifecycle management, navigation, state management patterns, or answering MauiReactor-specific architecture questions. Covers net9.0 target framework and latest MauiReactor 3.x API.
 ---

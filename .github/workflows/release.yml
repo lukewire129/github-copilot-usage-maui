@@ -11,6 +11,10 @@ jobs:
     permissions:
       contents: write
 
+    strategy:
+      matrix:
+        rid: [win-x64, win-arm64]
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,16 +32,16 @@ jobs:
           dotnet publish copilot-usage-maui.csproj
           -f net9.0-windows10.0.19041.0
           -c Release
-          -r win-x64
+          -r ${{ matrix.rid }}
           --self-contained true
           -o publish/windows
 
       - name: Compress published output
-        run: Compress-Archive -Path publish/windows/* -DestinationPath copilot-usage-maui-${{ github.ref_name }}-windows.zip
+        run: Compress-Archive -Path publish/windows/* -DestinationPath copilot-usage-maui-${{ github.ref_name }}-${{ matrix.rid }}.zip
         shell: pwsh
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: copilot-usage-maui-${{ github.ref_name }}-windows.zip
+          files: copilot-usage-maui-${{ github.ref_name }}-${{ matrix.rid }}.zip
           generate_release_notes: true

@@ -47,7 +47,7 @@ class ApplicationTheme : Theme
             .BackgroundColor(IsLightTheme ? Gray950 : Gray200);
 
         ButtonStyles.Default = _ => _
-            .TextColor(IsLightTheme ? White : PrimaryDarkText)
+            .TextColor(IsLightTheme ? Black : White)
             .BackgroundColor(IsLightTheme ? Primary : PrimaryDark)
             .FontFamily("OpenSansRegular")
             .FontSize(14)
@@ -126,7 +126,6 @@ class ApplicationTheme : Theme
         PickerStyles.Default = _ => _
             .TextColor(IsLightTheme ? Gray900 : White)
             .TitleColor(IsLightTheme ? Gray900 : Gray200)
-            .BackgroundColor(Colors.Transparent)
             .FontFamily("OpenSansRegular")
             .FontSize(14)
             .MinimumHeightRequest(44)

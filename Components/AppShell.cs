@@ -45,5 +45,5 @@ partial class AppShell : Component<AppShellState>
         )
         .Title("GitHub Copilot Usage")
         .Width(450)
-        .Height(700);
+        .Height(800);
 }

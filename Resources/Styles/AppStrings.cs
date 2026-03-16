@@ -47,10 +47,14 @@ static class AppStrings
     public static string SettingsTitle   => IsKorean ? "설정" : "Settings";
     public static string Appearance      => IsKorean ? "화면" : "Appearance";
     public static string Language        => IsKorean ? "언어" : "Language";
+    public static string QuotaLimit      => IsKorean ? "총 할당량 (req)" : "Quota Limit (req)";
     public static string MonthsHistory   => IsKorean ? "기록 기간 (월)" : "Months of History";
     public static string SaveSettings    => IsKorean ? "저장" : "Save Settings";
     public static string SettingsSaved   => IsKorean ? "✓ 저장 완료" : "✓ Settings saved";
     public static string CheckGhAuth     => IsKorean ? "gh 인증 확인" : "Check gh auth status";
+    public static string GhAuthDesc      => IsKorean
+        ? "gh CLI가 GitHub에 정상 인증되어 있는지 확인합니다.\n데이터 로드에 실패할 때 눌러보세요."
+        : "Verifies that gh CLI is authenticated with GitHub.\nTry this if usage data fails to load.";
     public static string GhAuthenticated => IsKorean ? "✓ gh CLI 인증됨" : "✓ gh CLI authenticated";
     public static string GhNoToken       => IsKorean ? "✗ 토큰 없음" : "✗ No token found";
 

@@ -134,33 +134,11 @@ class GitHubCopilotService
         return output.ToString().Trim();
     }
 
-    public async Task<int> GetPlanQuotaAsync()
-    {
-        string token = await GetGhTokenAsync();
-        using var req = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/user/copilot");
-        SetHeaders(req, token);
-        var resp = await _http.SendAsync(req);
-        if (!resp.IsSuccessStatusCode) return 300;
-        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
-        var root = doc.RootElement;
-        string? planType = null;
-        foreach (var key in new[] { "plan_type", "plan", "subscription_type", "type" })
-            if (root.TryGetProperty(key, out var p)) { planType = p.GetString(); break; }
-        return planType?.ToLowerInvariant() switch
-        {
-            "free" => 50,
-            "monthly" or "pro" or "individual" or "business" => 300,
-            "pro_plus" or "monthly_plus" or "copilot_pro_plus" => 1500,
-            "enterprise" => 300,
-            _ => 300
-        };
-    }
-
-    public async Task<UsageSummary> GetUsageSummaryAsync(int months)
+    public async Task<UsageSummary> GetUsageSummaryAsync(int months, int quotaOverride = 0)
     {
         string token = await GetGhTokenAsync();
         string username = await GetUsernameAsync(token);
-        int quota = 300;
+        int quota = quotaOverride > 0 ? quotaOverride : 300;
 
         var today = DateOnly.FromDateTime(DateTime.Today);
 

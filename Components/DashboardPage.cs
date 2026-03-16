@@ -10,7 +10,6 @@ class DashboardState
 {
     public bool IsLoading { get; set; } = true;
     public string? Error { get; set; }
-    public int NowQuota { get; set; } = 0;
     public UsageSummary? Summary { get; set; }
     public DateTime LastRefreshed { get; set; }
     public bool IsRefreshingAuth { get; set; }
@@ -125,11 +124,9 @@ partial class DashboardPage : Component<DashboardState>
 
         try
         {
-            var nowQuota = await _gitHubCopilotService.GetPlanQuotaAsync();
-            var summary = await _gitHubCopilotService.GetUsageSummaryAsync(_settingsService.MonthsHistory);
+            var summary = await _gitHubCopilotService.GetUsageSummaryAsync(_settingsService.MonthsHistory, _settingsService.QuotaLimit);
             SetState(s =>
             {
-                s.NowQuota = nowQuota;
                 s.Summary = summary;
                 s.IsLoading = false;
                 s.LastRefreshed = DateTime.Now;
@@ -268,7 +265,7 @@ partial class DashboardPage : Component<DashboardState>
 
         var s = State.Summary!;
         return VStack(
-            RenderUsageCard(State.NowQuota, s),
+            RenderUsageCard(s),
             RenderModelBreakdown(s),
             Label(AppStrings.LastRefreshed(State.LastRefreshed))
                 .FontSize(11)
@@ -279,7 +276,7 @@ partial class DashboardPage : Component<DashboardState>
         .Opacity(State.IsLoading ? 0.5 : 1.0);
     }
 
-    static VisualNode RenderUsageCard(int quota, UsageSummary s)
+    static VisualNode RenderUsageCard(UsageSummary s)
     {
         var pct = s.PercentConsumed / 100.0;
         var barColor = s.PercentConsumed >= 90 ? AppColors.StatusError
@@ -296,7 +293,7 @@ partial class DashboardPage : Component<DashboardState>
             Label(AppStrings.MonthlyUsage)
                 .FontSize(11)
                 .TextColor(AppColors.TextSecondary),
-            Label($"{s.MtdUsed:F0} / {quota} req  ({s.PercentConsumed:F1}%)")
+            Label($"{s.MtdUsed:F0} / {s.Quota} req  ({s.PercentConsumed:F1}%)")
                 .FontSize(24)
                 .FontAttributes(MauiControls.FontAttributes.Bold),
             ProgressBar()

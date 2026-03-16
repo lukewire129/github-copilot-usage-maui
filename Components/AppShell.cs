@@ -6,6 +6,7 @@ class AppShellState
 {
     public bool ShowSettings { get; set; }
     public AppTheme CurrentTheme { get; set; }
+    public int AppVersion { get; set; }
 }
 
 partial class AppShell : Component<AppShellState>
@@ -17,6 +18,7 @@ partial class AppShell : Component<AppShellState>
         SettingsService.ApplyTheme(settings.ThemePreference);
         if (MauiControls.Application.Current != null)
             MauiControls.Application.Current.RequestedThemeChanged += OnThemeChanged;
+        SettingsService.LanguageChanged += OnLanguageChanged;
     }
 
     protected override void OnWillUnmount()
@@ -24,10 +26,14 @@ partial class AppShell : Component<AppShellState>
         base.OnWillUnmount();
         if (MauiControls.Application.Current != null)
             MauiControls.Application.Current.RequestedThemeChanged -= OnThemeChanged;
+        SettingsService.LanguageChanged -= OnLanguageChanged;
     }
 
     void OnThemeChanged(object? sender, MauiControls.AppThemeChangedEventArgs e)
         => SetState(s => s.CurrentTheme = e.RequestedTheme);
+
+    void OnLanguageChanged(object? sender, EventArgs e)
+        => SetState(s => s.AppVersion++);
 
     public override VisualNode Render()
         => Window(

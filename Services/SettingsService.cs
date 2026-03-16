@@ -29,4 +29,18 @@ class SettingsService
             _ => AppTheme.Unspecified
         };
     }
+
+    const string KeyLanguagePreference = "language_preference";
+
+    public static event EventHandler? LanguageChanged;
+
+    public int LanguagePreference
+    {
+        get => Preferences.Default.Get(KeyLanguagePreference, 0);
+        set
+        {
+            Preferences.Default.Set(KeyLanguagePreference, value);
+            LanguageChanged?.Invoke(null, EventArgs.Empty);
+        }
+    }
 }

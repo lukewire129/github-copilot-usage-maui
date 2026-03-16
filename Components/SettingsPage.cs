@@ -9,6 +9,7 @@ class SettingsState
     public string GhStatus { get; set; } = "";
     public bool IsCheckingGh { get; set; }
     public int ThemePreference { get; set; }
+    public int LanguagePreference { get; set; }
 }
 
 partial class SettingsPage : Component<SettingsState>
@@ -29,6 +30,7 @@ partial class SettingsPage : Component<SettingsState>
         {
             s.MonthsHistory = settings.MonthsHistory.ToString();
             s.ThemePreference = settings.ThemePreference;
+            s.LanguagePreference = settings.LanguagePreference;
         });
     }
 
@@ -49,7 +51,7 @@ partial class SettingsPage : Component<SettingsState>
             string token = await service.GetGhTokenAsync();
             SetState(s =>
             {
-                s.GhStatus = token.Length > 0 ? "✓ gh CLI authenticated" : "✗ No token found";
+                s.GhStatus = token.Length > 0 ? AppStrings.GhAuthenticated : AppStrings.GhNoToken;
                 s.IsCheckingGh = false;
             });
         }
@@ -67,11 +69,11 @@ partial class SettingsPage : Component<SettingsState>
         => ContentPage(
             VStack(
                 Grid("Auto", "Auto, *",
-                    Button("← Back")
+                    Button(AppStrings.Back)
                         .OnClicked(() => _onBack?.Invoke())
                         .BackgroundColor(Colors.Transparent)
                         .TextColor(AppColors.TextSecondary),
-                    Label("Settings")
+                    Label(AppStrings.SettingsTitle)
                         .FontSize(20)
                         .FontAttributes(MauiControls.FontAttributes.Bold)
                         .GridColumn(1)
@@ -80,10 +82,10 @@ partial class SettingsPage : Component<SettingsState>
                 ),
                 BoxView().HeightRequest(1).BackgroundColor(AppColors.DividerColor),
 
-                Label("Appearance")
+                Label(AppStrings.Appearance)
                     .FontAttributes(MauiControls.FontAttributes.Bold),
                 Picker()
-                    .ItemsSource(new List<string> { "시스템 기본값", "라이트", "다크" })
+                    .ItemsSource(AppStrings.ThemeItems)
                     .SelectedIndex(State.ThemePreference)
                     .OnSelectedIndexChanged(idx =>
                     {
@@ -93,22 +95,34 @@ partial class SettingsPage : Component<SettingsState>
                         SettingsService.ApplyTheme(idx);
                     }),
 
+                Label(AppStrings.Language)
+                    .FontAttributes(MauiControls.FontAttributes.Bold),
+                Picker()
+                    .ItemsSource(AppStrings.LangItems)
+                    .SelectedIndex(State.LanguagePreference)
+                    .OnSelectedIndexChanged(idx =>
+                    {
+                        SetState(s => s.LanguagePreference = idx);
+                        var settings = IPlatformApplication.Current!.Services.GetRequiredService<SettingsService>();
+                        settings.LanguagePreference = idx;
+                    }),
+
                 BoxView().HeightRequest(1).BackgroundColor(AppColors.DividerColor),
 
-                Label("Months of History")
+                Label(AppStrings.MonthsHistory)
                     .FontAttributes(MauiControls.FontAttributes.Bold),
                 Entry()
                     .Text(State.MonthsHistory)
                     .Keyboard(Keyboard.Numeric)
                     .OnTextChanged(v => SetState(s => s.MonthsHistory = v)),
 
-                Button("Save Settings")
+                Button(AppStrings.SaveSettings)
                     .OnClicked(SaveSettings)
                     .BackgroundColor(AppColors.Accent)
                     .TextColor(AppColors.TextOnAccent),
 
                 State.IsSaved
-                    ? Label("✓ Settings saved")
+                    ? Label(AppStrings.SettingsSaved)
                         .TextColor(AppColors.StatusSuccessText)
                         .HCenter()
                     : Label(),
@@ -116,7 +130,7 @@ partial class SettingsPage : Component<SettingsState>
                 BoxView().HeightRequest(1).BackgroundColor(AppColors.DividerColor),
 
                 HStack(
-                    Button("Check gh auth status")
+                    Button(AppStrings.CheckGhAuth)
                         .OnClicked(async () => await CheckGhStatus())
                         .BackgroundColor(Colors.Transparent)
                         .TextColor(AppColors.TextSecondary),

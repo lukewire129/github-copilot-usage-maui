@@ -96,7 +96,7 @@ partial class DashboardPage : Component<DashboardState>
                     SetState(s =>
                     {
                         s.AuthDeviceCode = code;
-                        s.AuthRefreshOutput = "코드를 복사하고 브라우저에서 입력하세요.";
+                        s.AuthRefreshOutput = AppStrings.AuthInstruction;
                         s.IsRefreshingAuth = false;
                     })
                 )
@@ -106,12 +106,12 @@ partial class DashboardPage : Component<DashboardState>
             {
                 s.IsRefreshingAuth = false;
                 s.AuthDeviceCode = null;
-                s.AuthRefreshOutput = "✓ 인증 완료";
+                s.AuthRefreshOutput = AppStrings.AuthComplete;
             });
         }
         catch (Exception ex)
         {
-            SetState(s => { s.AuthRefreshOutput = $"오류: {ex.Message}"; s.IsRefreshingAuth = false; });
+            SetState(s => { s.AuthRefreshOutput = AppStrings.AuthError(ex.Message); s.IsRefreshingAuth = false; });
         }
     }
 
@@ -156,7 +156,7 @@ partial class DashboardPage : Component<DashboardState>
                             Label("GitHub Copilot")
                                 .FontSize(20)
                                 .FontAttributes(MauiControls.FontAttributes.Bold),
-                            Label(DateTime.Today.ToString("yyyy년 MM월 dd일 (ddd)"))
+                            Label(DateTime.Today.ToString(AppStrings.DateFormat))
                                 .FontSize(12)
                                 .TextColor(AppColors.TextSecondary)
                         ).Spacing(2),
@@ -201,7 +201,7 @@ partial class DashboardPage : Component<DashboardState>
                     Label("gh auth refresh").FontSize(13).FontAttributes(MauiControls.FontAttributes.Bold).VCenter(),
                     State.IsRefreshingAuth
                         ? (VisualNode)ActivityIndicator().IsRunning(true).GridColumn(1).VCenter()
-                        : Button("실행")
+                        : Button(AppStrings.Run)
                             .OnClicked(async () => await RunAuthRefresh())
                             .BackgroundColor(AppColors.Accent)
                             .TextColor(AppColors.TextOnAccent)
@@ -215,7 +215,7 @@ partial class DashboardPage : Component<DashboardState>
                             .TextColor(AppColors.TextOutput),
                         State.AuthDeviceCode != null
                             ? VStack(
-                                Label("인증 코드")
+                                Label(AppStrings.AuthCodeLabel)
                                     .FontSize(11)
                                     .TextColor(AppColors.TextSecondary),
                                 HStack(
@@ -223,7 +223,7 @@ partial class DashboardPage : Component<DashboardState>
                                         .FontSize(24)
                                         .FontAttributes(MauiControls.FontAttributes.Bold)
                                         .VCenter(),
-                                    Button("복사")
+                                    Button(AppStrings.Copy)
                                         .OnClicked(() =>
                                         {
                                             var code = State.AuthDeviceCode;
@@ -232,14 +232,14 @@ partial class DashboardPage : Component<DashboardState>
                                         .BackgroundColor(AppColors.CopyButtonBg)
                                         .TextColor(AppColors.CopyButtonText)
                                         .WidthRequest(60),
-                                    Button("브라우저 열기")
+                                    Button(AppStrings.OpenBrowser)
                                         .OnClicked(async () => await Launcher.Default.OpenAsync("https://github.com/login/device"))
                                         .BackgroundColor(AppColors.Accent)
                                         .TextColor(AppColors.TextOnAccent)
                                 ).Spacing(8)
                             ).Spacing(4)
                             : new Label(),
-                        Button("인증 완료 후 새로고침")
+                        Button(AppStrings.RefreshAfterAuth)
                             .OnClicked(async () => { SetState(s => s.ShowAuthPanel = false); await LoadData(); })
                             .BackgroundColor(Colors.Transparent)
                             .TextColor(AppColors.Accent)
@@ -260,17 +260,17 @@ partial class DashboardPage : Component<DashboardState>
 
         if (State.Error != null)
             return VStack(
-                Label("불러오기 실패").FontAttributes(MauiControls.FontAttributes.Bold).HCenter(),
+                Label(AppStrings.LoadFailed).FontAttributes(MauiControls.FontAttributes.Bold).HCenter(),
                 Label(State.Error).TextColor(AppColors.StatusError).HCenter().HorizontalTextAlignment(TextAlignment.Center),
-                Label("인증 문제라면 상단 🔑 버튼을 눌러주세요.").FontSize(12).TextColor(AppColors.TextSecondary).HCenter(),
-                Button("다시 시도").OnClicked(async () => await LoadData()).HCenter()
+                Label(AppStrings.AuthHint).FontSize(12).TextColor(AppColors.TextSecondary).HCenter(),
+                Button(AppStrings.Retry).OnClicked(async () => await LoadData()).HCenter()
             ).Spacing(8).VCenter().HCenter();
 
         var s = State.Summary!;
         return VStack(
             RenderUsageCard(State.NowQuota, s),
             RenderModelBreakdown(s),
-            Label($"마지막 갱신: {State.LastRefreshed:HH:mm:ss}")
+            Label(AppStrings.LastRefreshed(State.LastRefreshed))
                 .FontSize(11)
                 .TextColor(AppColors.TextSecondary)
                 .HEnd()
@@ -293,7 +293,7 @@ partial class DashboardPage : Component<DashboardState>
         bool isAhead = paceDiff >= 0;
 
         return VStack(
-            Label("이번 달 사용량")
+            Label(AppStrings.MonthlyUsage)
                 .FontSize(11)
                 .TextColor(AppColors.TextSecondary),
             Label($"{s.MtdUsed:F0} / {quota} req  ({s.PercentConsumed:F1}%)")
@@ -305,33 +305,33 @@ partial class DashboardPage : Component<DashboardState>
                 .HeightRequest(8),
 
             Grid("Auto,Auto,Auto,Auto,Auto,Auto", "*,*",
-                Label("오늘 사용").FontSize(12).TextColor(AppColors.TextSecondary),
+                Label(AppStrings.TodayUsage).FontSize(12).TextColor(AppColors.TextSecondary),
                 Label($"{s.TodayUsed:F0} req")
                     .FontSize(13).FontAttributes(MauiControls.FontAttributes.Bold).HEnd().GridColumn(1),
 
-                Label("남은 할당량").FontSize(12).TextColor(AppColors.TextSecondary).GridRow(1),
+                Label(AppStrings.Remaining).FontSize(12).TextColor(AppColors.TextSecondary).GridRow(1),
                 Label($"{s.Remaining:F0} req")
                     .FontSize(13).FontAttributes(MauiControls.FontAttributes.Bold).HEnd().GridColumn(1).GridRow(1),
 
-                Label("권장 일 사용량").FontSize(12).TextColor(AppColors.TextSecondary).GridRow(2),
+                Label(AppStrings.DailyBudget).FontSize(12).TextColor(AppColors.TextSecondary).GridRow(2),
                 Label($"{dailyBudget:F1} req/day")
                     .FontSize(13).FontAttributes(MauiControls.FontAttributes.Bold).HEnd().GridColumn(1).GridRow(2),
 
-                Label("현재 페이스").FontSize(12).TextColor(AppColors.TextSecondary).GridRow(3),
+                Label(AppStrings.CurrentPace).FontSize(12).TextColor(AppColors.TextSecondary).GridRow(3),
                 Label(isAhead
-                        ? $"✓ {paceDiff:F0} req 여유  /  {expectedByToday:F0} req"
-                        : $"⚠ {-paceDiff:F0} req 초과  /  {expectedByToday:F0} req")
+                        ? AppStrings.PaceAhead(paceDiff, expectedByToday)
+                        : AppStrings.PaceBehind(-paceDiff, expectedByToday))
                     .FontSize(13)
                     .FontAttributes(MauiControls.FontAttributes.Bold)
                     .TextColor(isAhead ? AppColors.StatusSuccess : AppColors.StatusError)
                     .HEnd().GridColumn(1).GridRow(3),
 
-                Label("이번 달 진행").FontSize(12).TextColor(AppColors.TextSecondary).GridRow(4),
-                Label($"{s.DaysElapsed}일 경과 / {s.DaysRemaining}일 남음")
+                Label(AppStrings.MonthProgress).FontSize(12).TextColor(AppColors.TextSecondary).GridRow(4),
+                Label(AppStrings.DaysProgress(s.DaysElapsed, s.DaysRemaining))
                     .FontSize(13).FontAttributes(MauiControls.FontAttributes.Bold).HEnd().GridColumn(1).GridRow(4),
 
-                Label("예상 월말 사용량").FontSize(12).TextColor(AppColors.TextSecondary).GridRow(5),
-                Label($"{s.AvgDailyUsage * totalDays:F0} req  {(s.ProjectedOverQuota ? "⚠ 초과" : "✓ 여유")}")
+                Label(AppStrings.ProjectedEnd).FontSize(12).TextColor(AppColors.TextSecondary).GridRow(5),
+                Label($"{s.AvgDailyUsage * totalDays:F0} req  {(s.ProjectedOverQuota ? AppStrings.OverQuota : AppStrings.UnderQuota)}")
                     .FontSize(13)
                     .FontAttributes(MauiControls.FontAttributes.Bold)
                     .TextColor(s.ProjectedOverQuota ? AppColors.StatusError : AppColors.StatusSuccess)
@@ -340,7 +340,7 @@ partial class DashboardPage : Component<DashboardState>
             .RowSpacing(10),
 
             s.ProjectedRunOutDate.HasValue
-                ? Label($"⚠ 할당량 소진 예상일: {s.ProjectedRunOutDate.Value:MM월 dd일}")
+                ? Label(AppStrings.RunOutDate(s.ProjectedRunOutDate.Value))
                     .FontSize(13)
                     .TextColor(s.ProjectedOverQuota ? AppColors.StatusError : AppColors.TextSecondary)
                 : new Label()
@@ -350,11 +350,11 @@ partial class DashboardPage : Component<DashboardState>
     static VisualNode RenderModelBreakdown(UsageSummary s)
     {
         if (s.ModelBreakdown.Count == 0)
-            return Label("모델별 사용 데이터 없음").TextColor(AppColors.TextSecondary).FontSize(13);
+            return Label(AppStrings.NoModelData).TextColor(AppColors.TextSecondary).FontSize(13);
 
         var rows = new List<VisualNode>
         {
-            Label("모델별 사용량")
+            Label(AppStrings.ModelBreakdown)
                 .FontSize(11)
                 .TextColor(AppColors.TextSecondary)
         };

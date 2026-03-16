@@ -22,7 +22,10 @@ gh auth login -h github.com -s user -w
 ```
 > 💡 **Important:** To access the Copilot Billing API used by this app, the `user` scope permission is strictly required in addition to the default permissions. Logging in with the `-s user` option ensures you can retrieve the correct information. The app also features an in-app permission refresh function (🔑 button).
 
-### 3. Development Environment
+### 3. Configure Quota Limit
+Currently, the GitHub API does not provide an endpoint to fetch the total Copilot quota limit for an individual user. Therefore, you must **manually enter your monthly quota limit in the Settings page (⚙️)** of this application to see accurate remaining quota and pace projections. 
+
+### 4. Development Environment
 - .NET 9.0 SDK or higher
 - .NET MAUI workload (`dotnet workload install maui`)
 

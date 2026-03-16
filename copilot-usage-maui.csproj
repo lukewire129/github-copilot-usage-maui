@@ -19,14 +19,14 @@
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)' == 'Release' And '$(TargetFramework)' == 'net9.0-windows10.0.19041.0'">
-<OutputType>WinExe</OutputType>
-    <PublishSingleFile>true</PublishSingleFile>
-    <SelfContained>true</SelfContained>
-    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
-    
-    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
-    
-    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+		<OutputType>WinExe</OutputType>
+		<PublishSingleFile>true</PublishSingleFile>
+		<SelfContained>true</SelfContained>
+		<EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+		
+		<WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+		
+		<IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
 	</PropertyGroup>
 
 	<ItemGroup><!-- App Icon -->
@@ -42,5 +42,10 @@
 		<PackageReference Include="Microsoft.Maui.Controls" Version="9.0.120" />
 		<PackageReference Include="Reactor.Maui" Version="3.0.40" />
 	</ItemGroup>
-
+	<ItemGroup Condition="'$(Configuration)'=='Debug'">
+		<RuntimeHostConfigurationOption Include="MauiReactor.HotReload" Value="true" Trim="false" />
+	</ItemGroup>
+	<ItemGroup Condition="'$(Configuration)'=='Release'">
+		<RuntimeHostConfigurationOption Include="MauiReactor.HotReload" Value="false" Trim="true" />
+	</ItemGroup>
 </Project>

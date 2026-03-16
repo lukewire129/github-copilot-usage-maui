@@ -8,6 +8,7 @@ class SettingsState
     public bool IsSaved { get; set; }
     public string GhStatus { get; set; } = "";
     public bool IsCheckingGh { get; set; }
+    public int ThemePreference { get; set; }
 }
 
 partial class SettingsPage : Component<SettingsState>
@@ -27,6 +28,7 @@ partial class SettingsPage : Component<SettingsState>
         SetState(s =>
         {
             s.MonthsHistory = settings.MonthsHistory.ToString();
+            s.ThemePreference = settings.ThemePreference;
         });
     }
 
@@ -68,7 +70,7 @@ partial class SettingsPage : Component<SettingsState>
                     Button("← Back")
                         .OnClicked(() => _onBack?.Invoke())
                         .BackgroundColor(Colors.Transparent)
-                        .TextColor(Colors.Gray),
+                        .TextColor(AppColors.TextSecondary),
                     Label("Settings")
                         .FontSize(20)
                         .FontAttributes(MauiControls.FontAttributes.Bold)
@@ -76,7 +78,22 @@ partial class SettingsPage : Component<SettingsState>
                         .VCenter()
                         .Margin(8, 0, 0, 0)
                 ),
-                BoxView().HeightRequest(1).BackgroundColor(Colors.LightGray),
+                BoxView().HeightRequest(1).BackgroundColor(AppColors.DividerColor),
+
+                Label("Appearance")
+                    .FontAttributes(MauiControls.FontAttributes.Bold),
+                Picker()
+                    .ItemsSource(new List<string> { "시스템 기본값", "라이트", "다크" })
+                    .SelectedIndex(State.ThemePreference)
+                    .OnSelectedIndexChanged(idx =>
+                    {
+                        SetState(s => s.ThemePreference = idx);
+                        var settings = IPlatformApplication.Current!.Services.GetRequiredService<SettingsService>();
+                        settings.ThemePreference = idx;
+                        SettingsService.ApplyTheme(idx);
+                    }),
+
+                BoxView().HeightRequest(1).BackgroundColor(AppColors.DividerColor),
 
                 Label("Months of History")
                     .FontAttributes(MauiControls.FontAttributes.Bold),
@@ -87,26 +104,26 @@ partial class SettingsPage : Component<SettingsState>
 
                 Button("Save Settings")
                     .OnClicked(SaveSettings)
-                    .BackgroundColor(Colors.RoyalBlue)
-                    .TextColor(Colors.White),
+                    .BackgroundColor(AppColors.Accent)
+                    .TextColor(AppColors.TextOnAccent),
 
                 State.IsSaved
                     ? Label("✓ Settings saved")
-                        .TextColor(Colors.Green)
+                        .TextColor(AppColors.StatusSuccessText)
                         .HCenter()
                     : Label(),
 
-                BoxView().HeightRequest(1).BackgroundColor(Colors.LightGray),
+                BoxView().HeightRequest(1).BackgroundColor(AppColors.DividerColor),
 
                 HStack(
                     Button("Check gh auth status")
                         .OnClicked(async () => await CheckGhStatus())
                         .BackgroundColor(Colors.Transparent)
-                        .TextColor(Colors.Gray),
+                        .TextColor(AppColors.TextSecondary),
                     State.IsCheckingGh
                         ? (VisualNode)ActivityIndicator().IsRunning(true).VCenter()
                         : Label(State.GhStatus)
-                            .TextColor(State.GhStatus.StartsWith("✓") ? Colors.Green : Colors.Red)
+                            .TextColor(State.GhStatus.StartsWith("✓") ? AppColors.StatusSuccessText : AppColors.StatusError)
                             .VCenter()
                 ).Spacing(8)
             )

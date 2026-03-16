@@ -10,6 +10,7 @@ class DashboardState
 {
     public bool IsLoading { get; set; } = true;
     public string? Error { get; set; }
+    public int NowQuota { get; set; } = 0;
     public UsageSummary? Summary { get; set; }
     public DateTime LastRefreshed { get; set; }
     public bool IsRefreshingAuth { get; set; }
@@ -69,6 +70,9 @@ partial class DashboardPage : Component<DashboardState>
     }
 #endif
 
+    [Inject] GitHubCopilotService _gitHubCopilotService;
+    [Inject] SettingsService _settingsService;
+
     Action? _onOpenSettings;
     public DashboardPage OnOpenSettings(Action action)
     {
@@ -87,9 +91,7 @@ partial class DashboardPage : Component<DashboardState>
         SetState(s => { s.IsRefreshingAuth = true; s.AuthRefreshOutput = null; s.AuthDeviceCode = null; });
         try
         {
-            var service = IPlatformApplication.Current!.Services.GetRequiredService<GitHubCopilotService>();
-
-            await Task.Run(async () => await service.RefreshGhAuthAsync(onCodeFound: code =>
+            await Task.Run(async () => await _gitHubCopilotService.RefreshGhAuthAsync(onCodeFound: code =>
                 MainThread.BeginInvokeOnMainThread(() =>
                     SetState(s =>
                     {
@@ -123,11 +125,11 @@ partial class DashboardPage : Component<DashboardState>
 
         try
         {
-            var settings = IPlatformApplication.Current!.Services.GetRequiredService<SettingsService>();
-            var service = IPlatformApplication.Current!.Services.GetRequiredService<GitHubCopilotService>();
-            var summary = await service.GetUsageSummaryAsync(settings.MonthsHistory);
+            var nowQuota = await _gitHubCopilotService.GetPlanQuotaAsync();
+            var summary = await _gitHubCopilotService.GetUsageSummaryAsync(_settingsService.MonthsHistory);
             SetState(s =>
             {
+                s.NowQuota = nowQuota;
                 s.Summary = summary;
                 s.IsLoading = false;
                 s.LastRefreshed = DateTime.Now;
@@ -156,7 +158,7 @@ partial class DashboardPage : Component<DashboardState>
                                 .FontAttributes(MauiControls.FontAttributes.Bold),
                             Label(DateTime.Today.ToString("yyyy년 MM월 dd일 (ddd)"))
                                 .FontSize(12)
-                                .TextColor(Colors.Gray)
+                                .TextColor(AppColors.TextSecondary)
                         ).Spacing(2),
                         HStack(
                             State.IsLoading
@@ -168,18 +170,18 @@ partial class DashboardPage : Component<DashboardState>
                                 : Button("⟳")
                                     .OnClicked(async () => await LoadData())
                                     .BackgroundColor(Colors.Transparent)
-                                    .TextColor(Colors.Gray)
+                                    .TextColor(AppColors.TextSecondary)
                                     .WidthRequest(40),
                             Button("🔑")
                                 .OnClicked(() => SetState(s => { s.ShowAuthPanel = !s.ShowAuthPanel; s.AuthRefreshOutput = null; }))
                                 .BackgroundColor(Colors.Transparent)
-                                .TextColor(State.ShowAuthPanel ? Colors.RoyalBlue : Colors.Gray)
-                                .WidthRequest(40),
+                                .TextColor(State.ShowAuthPanel ? AppColors.Accent : AppColors.TextSecondary)
+                                .WidthRequest(45),
                             Button("⚙")
                                 .OnClicked(() => _onOpenSettings?.Invoke())
                                 .BackgroundColor(Colors.Transparent)
-                                .TextColor(Colors.Gray)
-                                .WidthRequest(40)
+                                .TextColor(AppColors.TextSecondary)
+                                .WidthRequest(45)
                         )
                         .GridColumn(1)
                         .VCenter()
@@ -201,8 +203,8 @@ partial class DashboardPage : Component<DashboardState>
                         ? (VisualNode)ActivityIndicator().IsRunning(true).GridColumn(1).VCenter()
                         : Button("실행")
                             .OnClicked(async () => await RunAuthRefresh())
-                            .BackgroundColor(Colors.RoyalBlue)
-                            .TextColor(Colors.White)
+                            .BackgroundColor(AppColors.Accent)
+                            .TextColor(AppColors.TextOnAccent)
                             .GridColumn(1)
                             .WidthRequest(60)
                 ),
@@ -210,12 +212,12 @@ partial class DashboardPage : Component<DashboardState>
                     ? VStack(
                         Label(State.AuthRefreshOutput)
                             .FontSize(12)
-                            .TextColor(Colors.DarkSlateGray),
+                            .TextColor(AppColors.TextOutput),
                         State.AuthDeviceCode != null
                             ? VStack(
                                 Label("인증 코드")
                                     .FontSize(11)
-                                    .TextColor(Colors.Gray),
+                                    .TextColor(AppColors.TextSecondary),
                                 HStack(
                                     Label(State.AuthDeviceCode)
                                         .FontSize(24)
@@ -227,26 +229,26 @@ partial class DashboardPage : Component<DashboardState>
                                             var code = State.AuthDeviceCode;
                                             if (code != null) CopyToClipboard(code);
                                         })
-                                        .BackgroundColor(Colors.LightGray)
-                                        .TextColor(Colors.Black)
+                                        .BackgroundColor(AppColors.CopyButtonBg)
+                                        .TextColor(AppColors.CopyButtonText)
                                         .WidthRequest(60),
                                     Button("브라우저 열기")
                                         .OnClicked(async () => await Launcher.Default.OpenAsync("https://github.com/login/device"))
-                                        .BackgroundColor(Colors.RoyalBlue)
-                                        .TextColor(Colors.White)
+                                        .BackgroundColor(AppColors.Accent)
+                                        .TextColor(AppColors.TextOnAccent)
                                 ).Spacing(8)
                             ).Spacing(4)
                             : new Label(),
                         Button("인증 완료 후 새로고침")
                             .OnClicked(async () => { SetState(s => s.ShowAuthPanel = false); await LoadData(); })
                             .BackgroundColor(Colors.Transparent)
-                            .TextColor(Colors.RoyalBlue)
+                            .TextColor(AppColors.Accent)
                             .HStart()
                     ).Spacing(6)
                     : new Label()
             ).Spacing(8).Padding(12, 10)
         )
-        .BackgroundColor(Color.FromArgb("#F5F5F5"))
+        .BackgroundColor(AppColors.CardBackground)
         .Stroke(Colors.Transparent)
         .StrokeThickness(0)
         .StrokeShape(new MauiReactor.Shapes.RoundRectangle());
@@ -259,30 +261,30 @@ partial class DashboardPage : Component<DashboardState>
         if (State.Error != null)
             return VStack(
                 Label("불러오기 실패").FontAttributes(MauiControls.FontAttributes.Bold).HCenter(),
-                Label(State.Error).TextColor(Colors.Red).HCenter().HorizontalTextAlignment(TextAlignment.Center),
-                Label("인증 문제라면 상단 🔑 버튼을 눌러주세요.").FontSize(12).TextColor(Colors.Gray).HCenter(),
+                Label(State.Error).TextColor(AppColors.StatusError).HCenter().HorizontalTextAlignment(TextAlignment.Center),
+                Label("인증 문제라면 상단 🔑 버튼을 눌러주세요.").FontSize(12).TextColor(AppColors.TextSecondary).HCenter(),
                 Button("다시 시도").OnClicked(async () => await LoadData()).HCenter()
             ).Spacing(8).VCenter().HCenter();
 
         var s = State.Summary!;
         return VStack(
-            RenderUsageCard(s),
+            RenderUsageCard(State.NowQuota, s),
             RenderModelBreakdown(s),
             Label($"마지막 갱신: {State.LastRefreshed:HH:mm:ss}")
                 .FontSize(11)
-                .TextColor(Colors.Gray)
+                .TextColor(AppColors.TextSecondary)
                 .HEnd()
         )
         .Spacing(20)
         .Opacity(State.IsLoading ? 0.5 : 1.0);
     }
 
-    static VisualNode RenderUsageCard(UsageSummary s)
+    static VisualNode RenderUsageCard(int quota, UsageSummary s)
     {
         var pct = s.PercentConsumed / 100.0;
-        var barColor = s.PercentConsumed >= 90 ? Colors.Red
-            : s.PercentConsumed >= 70 ? Colors.Orange
-            : Colors.ForestGreen;
+        var barColor = s.PercentConsumed >= 90 ? AppColors.StatusError
+            : s.PercentConsumed >= 70 ? AppColors.StatusWarning
+            : AppColors.StatusSuccess;
 
         int totalDays = s.DaysElapsed + s.DaysRemaining;
         double dailyBudget = s.Quota / (double)totalDays;
@@ -293,8 +295,8 @@ partial class DashboardPage : Component<DashboardState>
         return VStack(
             Label("이번 달 사용량")
                 .FontSize(11)
-                .TextColor(Colors.Gray),
-            Label($"{s.MtdUsed:F0} / {s.Quota} req  ({s.PercentConsumed:F1}%)")
+                .TextColor(AppColors.TextSecondary),
+            Label($"{s.MtdUsed:F0} / {quota} req  ({s.PercentConsumed:F1}%)")
                 .FontSize(24)
                 .FontAttributes(MauiControls.FontAttributes.Bold),
             ProgressBar()
@@ -303,36 +305,36 @@ partial class DashboardPage : Component<DashboardState>
                 .HeightRequest(8),
 
             Grid("Auto,Auto,Auto,Auto,Auto,Auto", "*,*",
-                Label("오늘 사용").FontSize(12).TextColor(Colors.Gray),
+                Label("오늘 사용").FontSize(12).TextColor(AppColors.TextSecondary),
                 Label($"{s.TodayUsed:F0} req")
                     .FontSize(13).FontAttributes(MauiControls.FontAttributes.Bold).HEnd().GridColumn(1),
 
-                Label("남은 할당량").FontSize(12).TextColor(Colors.Gray).GridRow(1),
+                Label("남은 할당량").FontSize(12).TextColor(AppColors.TextSecondary).GridRow(1),
                 Label($"{s.Remaining:F0} req")
                     .FontSize(13).FontAttributes(MauiControls.FontAttributes.Bold).HEnd().GridColumn(1).GridRow(1),
 
-                Label("권장 일 사용량").FontSize(12).TextColor(Colors.Gray).GridRow(2),
+                Label("권장 일 사용량").FontSize(12).TextColor(AppColors.TextSecondary).GridRow(2),
                 Label($"{dailyBudget:F1} req/day")
                     .FontSize(13).FontAttributes(MauiControls.FontAttributes.Bold).HEnd().GridColumn(1).GridRow(2),
 
-                Label("현재 페이스").FontSize(12).TextColor(Colors.Gray).GridRow(3),
+                Label("현재 페이스").FontSize(12).TextColor(AppColors.TextSecondary).GridRow(3),
                 Label(isAhead
                         ? $"✓ {paceDiff:F0} req 여유  /  {expectedByToday:F0} req"
                         : $"⚠ {-paceDiff:F0} req 초과  /  {expectedByToday:F0} req")
                     .FontSize(13)
                     .FontAttributes(MauiControls.FontAttributes.Bold)
-                    .TextColor(isAhead ? Colors.ForestGreen : Colors.Red)
+                    .TextColor(isAhead ? AppColors.StatusSuccess : AppColors.StatusError)
                     .HEnd().GridColumn(1).GridRow(3),
 
-                Label("이번 달 진행").FontSize(12).TextColor(Colors.Gray).GridRow(4),
+                Label("이번 달 진행").FontSize(12).TextColor(AppColors.TextSecondary).GridRow(4),
                 Label($"{s.DaysElapsed}일 경과 / {s.DaysRemaining}일 남음")
                     .FontSize(13).FontAttributes(MauiControls.FontAttributes.Bold).HEnd().GridColumn(1).GridRow(4),
 
-                Label("예상 월말 사용량").FontSize(12).TextColor(Colors.Gray).GridRow(5),
+                Label("예상 월말 사용량").FontSize(12).TextColor(AppColors.TextSecondary).GridRow(5),
                 Label($"{s.AvgDailyUsage * totalDays:F0} req  {(s.ProjectedOverQuota ? "⚠ 초과" : "✓ 여유")}")
                     .FontSize(13)
                     .FontAttributes(MauiControls.FontAttributes.Bold)
-                    .TextColor(s.ProjectedOverQuota ? Colors.Red : Colors.ForestGreen)
+                    .TextColor(s.ProjectedOverQuota ? AppColors.StatusError : AppColors.StatusSuccess)
                     .HEnd().GridColumn(1).GridRow(5)
             )
             .RowSpacing(10),
@@ -340,7 +342,7 @@ partial class DashboardPage : Component<DashboardState>
             s.ProjectedRunOutDate.HasValue
                 ? Label($"⚠ 할당량 소진 예상일: {s.ProjectedRunOutDate.Value:MM월 dd일}")
                     .FontSize(13)
-                    .TextColor(s.ProjectedOverQuota ? Colors.Red : Colors.Gray)
+                    .TextColor(s.ProjectedOverQuota ? AppColors.StatusError : AppColors.TextSecondary)
                 : new Label()
         ).Spacing(10);
     }
@@ -348,13 +350,13 @@ partial class DashboardPage : Component<DashboardState>
     static VisualNode RenderModelBreakdown(UsageSummary s)
     {
         if (s.ModelBreakdown.Count == 0)
-            return Label("모델별 사용 데이터 없음").TextColor(Colors.Gray).FontSize(13);
+            return Label("모델별 사용 데이터 없음").TextColor(AppColors.TextSecondary).FontSize(13);
 
         var rows = new List<VisualNode>
         {
             Label("모델별 사용량")
                 .FontSize(11)
-                .TextColor(Colors.Gray)
+                .TextColor(AppColors.TextSecondary)
         };
 
         double total = s.ModelBreakdown.Values.Sum();
@@ -363,7 +365,7 @@ partial class DashboardPage : Component<DashboardState>
             double pct = total > 0 ? kv.Value / total * 100 : 0;
             rows.Add(
                 Grid("Auto", "*, Auto",
-                    Label(kv.Key).FontSize(13).TextColor(Colors.DarkGray).VCenter(),
+                    Label(kv.Key).FontSize(13).TextColor(AppColors.TextModelName).VCenter(),
                     Label($"{kv.Value:F0} req ({pct:F0}%)")
                         .FontSize(13)
                         .FontAttributes(MauiControls.FontAttributes.Bold)

@@ -16,3 +16,4 @@ global using Microsoft.Maui.ApplicationModel;
 global using Microsoft.Maui.ApplicationModel.DataTransfer;
 
 global using MauiReactor;
+global using copilot_usage_maui.Resources.Styles;

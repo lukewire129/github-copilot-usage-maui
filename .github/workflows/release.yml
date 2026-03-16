@@ -28,6 +28,8 @@ jobs:
           dotnet publish copilot-usage-maui.csproj
           -f net9.0-windows10.0.19041.0
           -c Release
+          -r win-x64
+          --self-contained true
           -o publish/windows
 
       - name: Compress published output

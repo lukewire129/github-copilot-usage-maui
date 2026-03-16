@@ -44,3 +44,5 @@ gh auth login -h github.com -s user -w
 dotnet build
 dotnet run -f net9.0-windows10.0.19041.0
 ```
+
+![alt text](image.png)

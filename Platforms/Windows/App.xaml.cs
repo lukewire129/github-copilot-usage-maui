@@ -17,6 +17,9 @@ namespace copilot_usage_maui.WinUI
         /// </summary>
         public App()
         {
+#if WINDOWS
+            Environment.SetEnvironmentVariable("MICROSOFT_WINDOWSAPPRUNTIME_BASE_DIRECTORY", AppContext.BaseDirectory);
+#endif
             this.InitializeComponent();
         }
 

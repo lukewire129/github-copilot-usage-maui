@@ -196,7 +196,7 @@ class GitHubCopilotService
             await FetchMonthAsync(token, username, prev.Year, prev.Month);
         }
 
-        return CalculateSummary(recentDays, mtdUsed, quota, planName, today);
+        return CalculateSummary(recentDays, mtdUsed, quota, planName, today, mtdModels);
     }
 
     async Task<(double total, double quota, Dictionary<string, double> models)> FetchMonthAsync(
@@ -281,7 +281,7 @@ class GitHubCopilotService
         return null;
     }
 
-    static UsageSummary CalculateSummary(List<DailyUsage> recentDays, double mtdUsed, int quota, string planName, DateOnly today)
+    static UsageSummary CalculateSummary(List<DailyUsage> recentDays, double mtdUsed, int quota, string planName, DateOnly today, Dictionary<string, double>? mtdModels = null)
     {
         var monthStart = new DateOnly(today.Year, today.Month, 1);
         var monthEnd = monthStart.AddMonths(1).AddDays(-1);
@@ -304,10 +304,15 @@ class GitHubCopilotService
                 projectedRunOutDate = today.AddDays((int)Math.Ceiling(daysUntilRunOut));
         }
 
-        var modelBreakdown = new Dictionary<string, double>();
-        foreach (var day in recentDays)
-            foreach (var kv in day.ModelBreakdown)
-                modelBreakdown[kv.Key] = modelBreakdown.GetValueOrDefault(kv.Key) + kv.Value;
+        // mtdModels가 있으면 이달 전체 기준, 없으면 recentDays(최근 14일)에서 집계
+        var modelBreakdown = mtdModels is { Count: > 0 }
+            ? new Dictionary<string, double>(mtdModels)
+            : recentDays.Aggregate(new Dictionary<string, double>(), (acc, day) =>
+            {
+                foreach (var kv in day.ModelBreakdown)
+                    acc[kv.Key] = acc.GetValueOrDefault(kv.Key) + kv.Value;
+                return acc;
+            });
 
         return new UsageSummary(
             Quota: quota,

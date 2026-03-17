@@ -4,7 +4,7 @@ static class AppColors
 {
     static bool IsDark => MauiControls.Application.Current?.RequestedTheme == AppTheme.Dark;
 
-    public static Color TextSecondary     => IsDark ? Color.FromArgb("#AAAAAA") : Colors.Gray;
+    public static Color TextSecondary     => IsDark ? Color.FromArgb("#AAAAAA") : Color.FromArgb("#595959");
     public static Color TextOutput        => IsDark ? Color.FromArgb("#CCCCCC") : Colors.DarkSlateGray;
     public static Color TextModelName     => IsDark ? Color.FromArgb("#BBBBBB") : Colors.DarkGray;
     public static Color TextOnAccent      => Colors.White;

@@ -168,22 +168,26 @@ partial class DashboardPage : Component<DashboardState>
                                     .OnClicked(async () => await LoadData())
                                     .BackgroundColor(Colors.Transparent)
                                     .TextColor(AppColors.TextSecondary)
-                                    .WidthRequest(40),
+                                    .WidthRequest(40)
+                                    .HeightRequest(44),
                             Button("🔑")
                                 .OnClicked(() => SetState(s => { s.ShowAuthPanel = !s.ShowAuthPanel; s.AuthRefreshOutput = null; }))
                                 .BackgroundColor(Colors.Transparent)
                                 .TextColor(State.ShowAuthPanel ? AppColors.Accent : AppColors.TextSecondary)
-                                .WidthRequest(45),
+                                .WidthRequest(45)
+                                .HeightRequest(44),
                             Button("⚙")
                                 .OnClicked(() => _onOpenSettings?.Invoke())
                                 .BackgroundColor(Colors.Transparent)
                                 .TextColor(AppColors.TextSecondary)
                                 .WidthRequest(45)
+                                .HeightRequest(44)
                         )
                         .GridColumn(1)
                         .VCenter()
                     ),
-                    State.ShowAuthPanel ? RenderAuthPanel() : RenderBody()
+                    State.ShowAuthPanel ? RenderAuthPanel() : new Label().HeightRequest(0),
+                    RenderBody()   // ← 항상 렌더링
                 )
                 .Spacing(20)
                 .Padding(24, 20)
@@ -194,7 +198,7 @@ partial class DashboardPage : Component<DashboardState>
         => Border(
             VStack(
                 Grid("Auto", "*, Auto",
-                    Label("gh auth refresh").FontSize(13).FontAttributes(MauiControls.FontAttributes.Bold).VCenter(),
+                    Label("gh auth refresh").FontSize(14).FontAttributes(MauiControls.FontAttributes.Bold).VCenter(),
                     State.IsRefreshingAuth
                         ? (VisualNode)ActivityIndicator().IsRunning(true).GridColumn(1).VCenter()
                         : Button(AppStrings.Run)
@@ -249,29 +253,38 @@ partial class DashboardPage : Component<DashboardState>
         .StrokeThickness(0)
         .StrokeShape(new MauiReactor.Shapes.RoundRectangle());
 
+    static VisualNode SectionCard(VisualNode content)
+        => Border(content)
+            .BackgroundColor(AppColors.CardBackground)
+            .Stroke(AppColors.DividerColor)
+            .StrokeThickness(1)
+            .StrokeShape(new MauiReactor.Shapes.RoundRectangle());
+
     VisualNode RenderBody()
     {
         if (State.IsLoading && State.Summary == null)
             return ActivityIndicator().IsRunning(true).HCenter().VCenter();
 
         if (State.Error != null)
-            return VStack(
-                Label(AppStrings.LoadFailed).FontAttributes(MauiControls.FontAttributes.Bold).HCenter(),
-                Label(State.Error).TextColor(AppColors.StatusError).HCenter().HorizontalTextAlignment(TextAlignment.Center),
-                Label(AppStrings.AuthHint).FontSize(12).TextColor(AppColors.TextSecondary).HCenter(),
-                Button(AppStrings.Retry).OnClicked(async () => await LoadData()).HCenter()
-            ).Spacing(8).VCenter().HCenter();
+            return SectionCard(
+                VStack(
+                    Label(AppStrings.LoadFailed).FontSize(15).FontAttributes(MauiControls.FontAttributes.Bold).HCenter(),
+                    Label(State.Error).TextColor(AppColors.StatusError).HCenter().HorizontalTextAlignment(TextAlignment.Center).FontSize(13),
+                    Label(AppStrings.AuthHint).FontSize(12).TextColor(AppColors.TextSecondary).HCenter(),
+                    Button(AppStrings.Retry).OnClicked(async () => await LoadData()).HCenter()
+                ).Spacing(10).Padding(16, 14)
+            );
 
         var s = State.Summary!;
         return VStack(
-            RenderUsageCard(s),
-            RenderModelBreakdown(s),
+            SectionCard(RenderUsageCard(s)),
+            SectionCard(RenderModelBreakdown(s)),
             Label(AppStrings.LastRefreshed(State.LastRefreshed))
                 .FontSize(11)
                 .TextColor(AppColors.TextSecondary)
                 .HEnd()
         )
-        .Spacing(20)
+        .Spacing(16)
         .Opacity(State.IsLoading ? 0.5 : 1.0);
     }
 
@@ -313,44 +326,44 @@ partial class DashboardPage : Component<DashboardState>
             Grid("Auto,Auto,Auto,Auto,Auto,Auto", "*,*",
                 Label(AppStrings.TodayUsage).FontSize(12).TextColor(AppColors.TextSecondary),
                 Label($"{s.TodayUsed:F0} req")
-                    .FontSize(13).FontAttributes(MauiControls.FontAttributes.Bold).HEnd().GridColumn(1),
+                    .FontSize(14).FontAttributes(MauiControls.FontAttributes.Bold).HEnd().GridColumn(1),
 
                 Label(AppStrings.Remaining).FontSize(12).TextColor(AppColors.TextSecondary).GridRow(1),
                 Label($"{s.Remaining:F0} req")
-                    .FontSize(13).FontAttributes(MauiControls.FontAttributes.Bold).HEnd().GridColumn(1).GridRow(1),
+                    .FontSize(14).FontAttributes(MauiControls.FontAttributes.Bold).HEnd().GridColumn(1).GridRow(1),
 
                 Label(AppStrings.DailyBudget).FontSize(12).TextColor(AppColors.TextSecondary).GridRow(2),
                 Label($"{dailyBudget:F1} req/day")
-                    .FontSize(13).FontAttributes(MauiControls.FontAttributes.Bold).HEnd().GridColumn(1).GridRow(2),
+                    .FontSize(14).FontAttributes(MauiControls.FontAttributes.Bold).HEnd().GridColumn(1).GridRow(2),
 
                 Label(AppStrings.CurrentPace).FontSize(12).TextColor(AppColors.TextSecondary).GridRow(3),
                 Label(isAhead
                         ? AppStrings.PaceAhead(paceDiff, expectedByToday)
                         : AppStrings.PaceBehind(-paceDiff, expectedByToday))
-                    .FontSize(13)
+                    .FontSize(14)
                     .FontAttributes(MauiControls.FontAttributes.Bold)
                     .TextColor(isAhead ? AppColors.StatusSuccess : AppColors.StatusError)
                     .HEnd().GridColumn(1).GridRow(3),
 
                 Label(AppStrings.MonthProgress).FontSize(12).TextColor(AppColors.TextSecondary).GridRow(4),
                 Label(AppStrings.DaysProgress(s.DaysElapsed, s.DaysRemaining))
-                    .FontSize(13).FontAttributes(MauiControls.FontAttributes.Bold).HEnd().GridColumn(1).GridRow(4),
+                    .FontSize(14).FontAttributes(MauiControls.FontAttributes.Bold).HEnd().GridColumn(1).GridRow(4),
 
                 Label(AppStrings.ProjectedEnd).FontSize(12).TextColor(AppColors.TextSecondary).GridRow(5),
                 Label($"{s.AvgDailyUsage * totalDays:F0} req  {(s.ProjectedOverQuota ? AppStrings.OverQuota : AppStrings.UnderQuota)}")
-                    .FontSize(13)
+                    .FontSize(14)
                     .FontAttributes(MauiControls.FontAttributes.Bold)
                     .TextColor(s.ProjectedOverQuota ? AppColors.StatusError : AppColors.StatusSuccess)
                     .HEnd().GridColumn(1).GridRow(5)
             )
-            .RowSpacing(10),
+            .RowSpacing(12),
 
             s.ProjectedRunOutDate.HasValue
                 ? Label(AppStrings.RunOutDate(s.ProjectedRunOutDate.Value))
                     .FontSize(13)
                     .TextColor(s.ProjectedOverQuota ? AppColors.StatusError : AppColors.TextSecondary)
                 : new Label()
-        ).Spacing(10);
+        ).Spacing(12).Padding(16, 14);
     }
 
     static VisualNode RenderModelBreakdown(UsageSummary s)
@@ -373,7 +386,7 @@ partial class DashboardPage : Component<DashboardState>
                 Grid("Auto", "*, Auto",
                     Label(kv.Key).FontSize(13).TextColor(AppColors.TextModelName).VCenter(),
                     Label($"{kv.Value:F0} req ({pct:F0}%)")
-                        .FontSize(13)
+                        .FontSize(14)
                         .FontAttributes(MauiControls.FontAttributes.Bold)
                         .GridColumn(1)
                         .HEnd()
@@ -381,6 +394,6 @@ partial class DashboardPage : Component<DashboardState>
             );
         }
 
-        return VStack([.. rows]).Spacing(8);
+        return VStack([.. rows]).Spacing(10).Padding(16, 14);
     }
 }

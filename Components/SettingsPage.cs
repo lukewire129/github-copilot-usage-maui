@@ -90,26 +90,32 @@ partial class SettingsPage : Component<SettingsState>
         => ContentPage(
             VStack(
                 // Header
-                Grid("Auto", "Auto, *",
-                    Button(AppStrings.Back)
+                Grid("48", "48, *, 48",
+                    Button("←")
                         .OnClicked(() => _onBack?.Invoke())
                         .BackgroundColor(Colors.Transparent)
-                        .TextColor(AppColors.TextSecondary),
-                    Label(AppStrings.SettingsTitle)
+                        .TextColor(AppColors.Accent)
                         .FontSize(20)
+                        .HeightRequest(48)
+                        .WidthRequest(48),
+                    Label(AppStrings.SettingsTitle)
+                        .FontSize(17)
                         .FontAttributes(MauiControls.FontAttributes.Bold)
                         .GridColumn(1)
-                        .VCenter()
-                        .Margin(8, 0, 0, 0)
+                        .HCenter()
+                        .VCenter(),
+                    new Label().GridColumn(2)
                 ),
+                BoxView().HeightRequest(1).BackgroundColor(AppColors.DividerColor),
+                ScrollView(
+                VStack(
 
                 // Appearance card
                 SectionCard(
                     VStack(
                         Label(AppStrings.Appearance)
                             .FontAttributes(MauiControls.FontAttributes.Bold)
-                            .FontSize(13)
-                            .TextColor(AppColors.TextSecondary),
+                            .FontSize(13),
                         BoxView().HeightRequest(1).BackgroundColor(AppColors.DividerColor),
                         FieldRow(AppStrings.Language,
                             StyledPicker(AppStrings.LangItems, State.LanguagePreference, idx =>
@@ -136,8 +142,7 @@ partial class SettingsPage : Component<SettingsState>
                     VStack(
                         Label(AppStrings.MonthsHistory)
                             .FontAttributes(MauiControls.FontAttributes.Bold)
-                            .FontSize(13)
-                            .TextColor(AppColors.TextSecondary),
+                            .FontSize(13),
                         BoxView().HeightRequest(1).BackgroundColor(AppColors.DividerColor),
                         FieldRow(AppStrings.MonthsHistory,
                             Entry()
@@ -162,8 +167,7 @@ partial class SettingsPage : Component<SettingsState>
                     VStack(
                         Label(AppStrings.CheckGhAuth)
                             .FontAttributes(MauiControls.FontAttributes.Bold)
-                            .FontSize(13)
-                            .TextColor(AppColors.TextSecondary),
+                            .FontSize(13),
                         BoxView().HeightRequest(1).BackgroundColor(AppColors.DividerColor),
                         Label(AppStrings.GhAuthDesc)
                             .FontSize(12)
@@ -183,8 +187,10 @@ partial class SettingsPage : Component<SettingsState>
                         ).Spacing(12)
                     ).Spacing(10).Padding(14, 12)
                 )
+
+                ).Spacing(12).Padding(20, 16)
+                )
             )
-            .Spacing(12)
-            .Padding(20, 16)
+            .Spacing(0)
         );
 }

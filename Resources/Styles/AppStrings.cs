@@ -47,7 +47,6 @@ static class AppStrings
     public static string SettingsTitle   => IsKorean ? "설정" : "Settings";
     public static string Appearance      => IsKorean ? "화면" : "Appearance";
     public static string Language        => IsKorean ? "언어" : "Language";
-    public static string QuotaLimit      => IsKorean ? "총 할당량 (req)" : "Quota Limit (req)";
     public static string MonthsHistory   => IsKorean ? "기록 기간 (월)" : "Months of History";
     public static string SaveSettings    => IsKorean ? "저장" : "Save Settings";
     public static string SettingsSaved   => IsKorean ? "✓ 저장 완료" : "✓ Settings saved";

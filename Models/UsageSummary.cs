@@ -2,6 +2,7 @@ namespace copilot_usage_maui.Models;
 
 record UsageSummary(
     int Quota,
+    string PlanName,
     double MtdUsed,
     double Remaining,
     double PercentConsumed,

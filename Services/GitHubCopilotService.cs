@@ -134,17 +134,47 @@ class GitHubCopilotService
         return output.ToString().Trim();
     }
 
-    public async Task<UsageSummary> GetUsageSummaryAsync(int months, int quotaOverride = 0)
+    public async Task<(string planName, int entitlement)> GetCopilotPlanAsync(string token)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/copilot_internal/user");
+        SetHeaders(req, token);
+        var resp = await _http.SendAsync(req);
+        resp.EnsureSuccessStatusCode();
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+        var root = doc.RootElement;
+
+        string plan = root.TryGetProperty("copilot_plan", out var planEl) ? planEl.GetString() ?? "" : "";
+        string planName = plan switch
+        {
+            "individual" => "Pro",
+            "individual_pro" => "Pro Plus",
+            _ => plan
+        };
+
+        int entitlement = 0;
+        if (root.TryGetProperty("premium_interactions", out var piEl) &&
+            piEl.TryGetProperty("entitlement", out var entEl) &&
+            entEl.TryGetInt32(out var ent))
+            entitlement = ent;
+
+        return (planName, entitlement);
+    }
+
+    public async Task<UsageSummary> GetUsageSummaryAsync(int months)
     {
         string token = await GetGhTokenAsync();
         string username = await GetUsernameAsync(token);
-        int quota = quotaOverride > 0 ? quotaOverride : 300;
+
+        string planName = "";
+        int quota = 0;
+        try { (planName, quota) = await GetCopilotPlanAsync(token); } catch { }
 
         var today = DateOnly.FromDateTime(DateTime.Today);
 
         // Fetch current month aggregate (MTD total + quota)
         var (mtdUsed, quotaFromApi, mtdModels) = await FetchMonthAsync(token, username, today.Year, today.Month);
-        if (quotaFromApi > 0) quota = (int)quotaFromApi;
+        if (quota <= 0 && quotaFromApi > 0) quota = (int)quotaFromApi;
+        if (quota <= 0) quota = 300;
 
         // Fetch recent 14 days for sparkline
         var recentDays = new List<DailyUsage>();
@@ -166,7 +196,7 @@ class GitHubCopilotService
             await FetchMonthAsync(token, username, prev.Year, prev.Month);
         }
 
-        return CalculateSummary(recentDays, mtdUsed, quota, today);
+        return CalculateSummary(recentDays, mtdUsed, quota, planName, today);
     }
 
     async Task<(double total, double quota, Dictionary<string, double> models)> FetchMonthAsync(
@@ -251,7 +281,7 @@ class GitHubCopilotService
         return null;
     }
 
-    static UsageSummary CalculateSummary(List<DailyUsage> recentDays, double mtdUsed, int quota, DateOnly today)
+    static UsageSummary CalculateSummary(List<DailyUsage> recentDays, double mtdUsed, int quota, string planName, DateOnly today)
     {
         var monthStart = new DateOnly(today.Year, today.Month, 1);
         var monthEnd = monthStart.AddMonths(1).AddDays(-1);
@@ -281,6 +311,7 @@ class GitHubCopilotService
 
         return new UsageSummary(
             Quota: quota,
+            PlanName: planName,
             MtdUsed: mtdUsed,
             Remaining: Math.Max(0, quota - mtdUsed),
             PercentConsumed: quota > 0 ? mtdUsed / quota * 100 : 0,

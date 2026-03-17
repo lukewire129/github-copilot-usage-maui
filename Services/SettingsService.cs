@@ -30,14 +30,6 @@ class SettingsService
         };
     }
 
-    const string KeyQuotaLimit = "quota_limit";
-
-    public int QuotaLimit
-    {
-        get => Preferences.Default.Get(KeyQuotaLimit, 300);
-        set => Preferences.Default.Set(KeyQuotaLimit, value);
-    }
-
     const string KeyLanguagePreference = "language_preference";
 
     public static event EventHandler? LanguageChanged;

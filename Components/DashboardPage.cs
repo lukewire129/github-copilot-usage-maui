@@ -124,7 +124,7 @@ partial class DashboardPage : Component<DashboardState>
 
         try
         {
-            var summary = await _gitHubCopilotService.GetUsageSummaryAsync(_settingsService.MonthsHistory, _settingsService.QuotaLimit);
+            var summary = await _gitHubCopilotService.GetUsageSummaryAsync(_settingsService.MonthsHistory);
             SetState(s =>
             {
                 s.Summary = summary;
@@ -183,8 +183,7 @@ partial class DashboardPage : Component<DashboardState>
                         .GridColumn(1)
                         .VCenter()
                     ),
-                    State.ShowAuthPanel ? RenderAuthPanel() : new Label().HeightRequest(0),
-                    RenderBody()
+                    State.ShowAuthPanel ? RenderAuthPanel() : RenderBody()
                 )
                 .Spacing(20)
                 .Padding(24, 20)
@@ -290,9 +289,19 @@ partial class DashboardPage : Component<DashboardState>
         bool isAhead = paceDiff >= 0;
 
         return VStack(
-            Label(AppStrings.MonthlyUsage)
-                .FontSize(11)
-                .TextColor(AppColors.TextSecondary),
+            Grid("Auto", "*, Auto",
+                Label(AppStrings.MonthlyUsage)
+                    .FontSize(11)
+                    .TextColor(AppColors.TextSecondary)
+                    .VCenter(),
+                s.PlanName.Length > 0
+                    ? Label(s.PlanName)
+                        .FontSize(15)
+                        .TextColor(AppColors.Accent)
+                        .FontAttributes(MauiControls.FontAttributes.Bold)
+                        .GridColumn(1)
+                    : new Label().GridColumn(1)
+            ),
             Label($"{s.MtdUsed:F0} / {s.Quota} req  ({s.PercentConsumed:F1}%)")
                 .FontSize(24)
                 .FontAttributes(MauiControls.FontAttributes.Bold),

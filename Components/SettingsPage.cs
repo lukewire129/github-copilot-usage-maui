@@ -5,7 +5,6 @@ namespace copilot_usage_maui.Components;
 class SettingsState
 {
     public string MonthsHistory { get; set; } = "6";
-    public string QuotaLimit { get; set; } = "300";
     public bool IsSaved { get; set; }
     public string GhStatus { get; set; } = "";
     public bool IsCheckingGh { get; set; }
@@ -30,7 +29,6 @@ partial class SettingsPage : Component<SettingsState>
         SetState(s =>
         {
             s.MonthsHistory = settings.MonthsHistory.ToString();
-            s.QuotaLimit = settings.QuotaLimit.ToString();
             s.ThemePreference = settings.ThemePreference;
             s.LanguagePreference = settings.LanguagePreference;
         });
@@ -40,7 +38,6 @@ partial class SettingsPage : Component<SettingsState>
     {
         var settings = IPlatformApplication.Current!.Services.GetRequiredService<SettingsService>();
         if (int.TryParse(State.MonthsHistory, out int months)) settings.MonthsHistory = months;
-        if (int.TryParse(State.QuotaLimit, out int quota) && quota > 0) settings.QuotaLimit = quota;
         SetState(s => s.IsSaved = true);
         Task.Delay(2000).ContinueWith(_ => SetState(s => s.IsSaved = false));
     }
@@ -137,17 +134,11 @@ partial class SettingsPage : Component<SettingsState>
                 // Usage card
                 SectionCard(
                     VStack(
-                        Label(AppStrings.MonthsHistory + " / " + AppStrings.QuotaLimit)
+                        Label(AppStrings.MonthsHistory)
                             .FontAttributes(MauiControls.FontAttributes.Bold)
                             .FontSize(13)
                             .TextColor(AppColors.TextSecondary),
                         BoxView().HeightRequest(1).BackgroundColor(AppColors.DividerColor),
-                        FieldRow(AppStrings.QuotaLimit,
-                            Entry()
-                                .Text(State.QuotaLimit)
-                                .Keyboard(Keyboard.Numeric)
-                                .OnTextChanged(v => SetState(s => s.QuotaLimit = v))
-                        ),
                         FieldRow(AppStrings.MonthsHistory,
                             Entry()
                                 .Text(State.MonthsHistory)

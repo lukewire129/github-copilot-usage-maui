@@ -30,6 +30,21 @@ class SettingsService
         };
     }
 
+    const string KeyClaudeAuthMethod = "claude_auth_method";
+    const string KeyClaudeCliPath = "claude_cli_path";
+
+    public int ClaudeAuthMethod
+    {
+        get => Preferences.Default.Get(KeyClaudeAuthMethod, 0);
+        set => Preferences.Default.Set(KeyClaudeAuthMethod, value);
+    }
+
+    public string ClaudeCliPath
+    {
+        get => Preferences.Default.Get(KeyClaudeCliPath, "");
+        set => Preferences.Default.Set(KeyClaudeCliPath, value);
+    }
+
     const string KeyLanguagePreference = "language_preference";
 
     public static event EventHandler? LanguageChanged;

@@ -1,3 +1,4 @@
+using copilot_usage_maui.Models;
 using copilot_usage_maui.Services;
 using copilot_usage_maui.SettingsComponents;
 using ReactorRouter.Navigation;
@@ -12,12 +13,17 @@ class SettingsState
     public bool IsCheckingGh { get; set; }
     public int ThemePreference { get; set; }
     public int LanguagePreference { get; set; }
+    public int ClaudeAuthMethod { get; set; }
+    public string ClaudeCliPath { get; set; } = "";
+    public string ClaudeStatus { get; set; } = "";
+    public bool IsCheckingClaude { get; set; }
 }
 
 partial class SettingsPage : Component<SettingsState>
 {
 
     [Inject] GitHubCopilotService _gitHubCopilotService;
+    [Inject] ClaudeUsageService _claudeUsageService;
 
     protected override void OnMounted()
     {
@@ -28,6 +34,8 @@ partial class SettingsPage : Component<SettingsState>
             s.MonthsHistory = settings.MonthsHistory.ToString();
             s.ThemePreference = settings.ThemePreference;
             s.LanguagePreference = settings.LanguagePreference;
+            s.ClaudeAuthMethod = settings.ClaudeAuthMethod;
+            s.ClaudeCliPath = settings.ClaudeCliPath;
         });
     }
 
@@ -37,6 +45,13 @@ partial class SettingsPage : Component<SettingsState>
         if (int.TryParse(State.MonthsHistory, out int months)) settings.MonthsHistory = months;
         SetState(s => s.IsSaved = true);
         Task.Delay(2000).ContinueWith(_ => SetState(s => s.IsSaved = false));
+    }
+
+    async Task CheckClaudeStatus()
+    {
+        SetState(s => { s.IsCheckingClaude = true; s.ClaudeStatus = ""; });
+        string result = await _claudeUsageService.DiagnoseAsync();
+        SetState(s => { s.ClaudeStatus = result; s.IsCheckingClaude = false; });
     }
 
     async Task CheckGhStatus()
@@ -83,7 +98,7 @@ partial class SettingsPage : Component<SettingsState>
         ).Spacing(4);
 
     public override VisualNode Render()
-        => ContentView(
+        => ScrollView(
             VStack(
                 // Header
                 Grid("48", "48, *, 48",
@@ -180,6 +195,51 @@ partial class SettingsPage : Component<SettingsState>
                                     .TextColor(State.GhStatus.StartsWith("✓") ? AppColors.StatusSuccessText : AppColors.StatusError)
                                     .VCenter()
                                     .FontSize(13)
+                        ).Spacing(12)
+                    ).Spacing(10).Padding(14, 12)
+                ),
+
+                // Claude settings card
+                SectionCard(
+                    VStack(
+                        Label(AppStrings.ClaudeSettingsTitle)
+                            .FontAttributes(MauiControls.FontAttributes.Bold)
+                            .FontSize(13),
+                        BoxView().HeightRequest(1).BackgroundColor(AppColors.DividerColor),
+                        FieldRow(AppStrings.ClaudeAuthMethod,
+                            StyledPicker(AppStrings.ClaudeAuthItems, State.ClaudeAuthMethod, idx =>
+                            {
+                                SetState(s => s.ClaudeAuthMethod = idx);
+                                var settings = IPlatformApplication.Current!.Services.GetRequiredService<SettingsService>();
+                                settings.ClaudeAuthMethod = idx;
+                            })
+                        ),
+                        FieldRow(AppStrings.ClaudeCliPathLabel,
+                            Entry()
+                                .Text(State.ClaudeCliPath)
+                                .Placeholder("(auto-detect)")
+                                .OnTextChanged(v =>
+                                {
+                                    SetState(s => s.ClaudeCliPath = v);
+                                    var settings = IPlatformApplication.Current!.Services.GetRequiredService<SettingsService>();
+                                    settings.ClaudeCliPath = v;
+                                })
+                        ),
+                        Label(AppStrings.ClaudeAuthDesc)
+                            .FontSize(12)
+                            .TextColor(AppColors.TextSecondary),
+                        HStack(
+                            Button(AppStrings.CheckClaudeAuth)
+                                .OnClicked(async () => await CheckClaudeStatus())
+                                .BackgroundColor(AppColors.Accent)
+                                .TextColor(AppColors.TextOnAccent)
+                                .WidthRequest(140),
+                            State.IsCheckingClaude
+                                ? (VisualNode)ActivityIndicator().IsRunning(true).VCenter()
+                                : Label(State.ClaudeStatus)
+                                    .TextColor(State.ClaudeStatus.StartsWith("✓") ? AppColors.StatusSuccessText : AppColors.StatusError)
+                                    .FontSize(12)
+                                    .LineBreakMode(LineBreakMode.WordWrap)
                         ).Spacing(12)
                     ).Spacing(10).Padding(14, 12)
                 )

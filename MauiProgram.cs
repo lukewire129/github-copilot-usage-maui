@@ -42,6 +42,8 @@ namespace copilot_usage_maui
 
             builder.Services.AddSingleton<SettingsService>();
             builder.Services.AddSingleton<GitHubCopilotService>();
+            builder.Services.AddSingleton<ClaudeUsageService>();
+            builder.Services.AddSingleton<NotificationService>();
 
             return builder.Build();
         }

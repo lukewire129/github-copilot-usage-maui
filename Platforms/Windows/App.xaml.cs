@@ -1,4 +1,5 @@
 ﻿using Microsoft.Maui;
+using Microsoft.Toolkit.Uwp.Notifications;
 using Microsoft.UI.Xaml;
 
 // To learn more about WinUI, the WinUI project structure,
@@ -24,6 +25,16 @@ namespace copilot_usage_maui.WinUI
         }
 
         protected override MauiApp CreateMauiApp() => MauiProgram.CreateMauiApp();
+
+        protected override void OnLaunched(LaunchActivatedEventArgs args)
+        {
+            base.OnLaunched(args);
+            // unpackaged 앱: 프로세스 종료 시 토스트 등록 정리
+            AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+            {
+                try { ToastNotificationManagerCompat.Uninstall(); } catch { }
+            };
+        }
     }
 
 }

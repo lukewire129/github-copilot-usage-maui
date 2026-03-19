@@ -65,6 +65,56 @@ static class AppStrings
     // Language names are shown as-is in both languages
     public static List<string> LangItems => ["System Default / 시스템", "English", "한국어"];
 
+    // --- Claude Dashboard ---
+    public static string ClaudeSessionUsage  => IsKorean ? "세션 사용량 (5시간)" : "Session Usage (5h)";
+    public static string ClaudeWeeklyUsage   => IsKorean ? "주간 사용량 (7일)" : "Weekly Usage (7d)";
+    public static string ClaudeModelLimits   => IsKorean ? "모델별 제한" : "Model Limits";
+    public static string ClaudeAccountInfo   => IsKorean ? "계정 정보" : "Account Info";
+    public static string ClaudeEmail         => IsKorean ? "이메일" : "Email";
+    public static string ClaudePlan          => IsKorean ? "플랜" : "Plan";
+    public static string ClaudeNoData        => IsKorean ? "Claude 사용 데이터 없음" : "No Claude usage data";
+    public static string ClaudeAuthHint      => IsKorean
+        ? "Claude CLI 또는 OAuth 인증이 필요합니다.\n'claude' 명령으로 로그인하세요."
+        : "Claude CLI or OAuth authentication required.\nRun 'claude' to log in.";
+
+    // Condition management
+    public static string ClaudeCondition     => IsKorean ? "컨디션 관리" : "Usage Condition";
+    public static string ClaudeUsageOk       => IsKorean ? "✓ 여유롭게 사용 가능" : "✓ Usage is on track";
+    public static string ClaudeUsageWarn     => IsKorean ? "⚠ 사용 속도가 빠릅니다" : "⚠ Usage pace is fast";
+    public static string ClaudeUsageDanger   => IsKorean ? "🔴 한도 초과 예상 / 임박" : "🔴 Near or over limit";
+    public static string ClaudeElapsed       => IsKorean ? "경과" : "Elapsed";
+    public static string ClaudeRemaining     => IsKorean ? "남은 시간" : "Time Left";
+    public static string ClaudeResetCountdown => IsKorean ? "초기화까지" : "Resets in";
+    public static string ClaudePaceLabel     => IsKorean ? "사용 속도" : "Pace";
+    public static string ClaudePaceNormal    => IsKorean ? "정상" : "Normal";
+    public static string ClaudePaceFast      => IsKorean ? "빠름" : "Fast";
+
+    public static string ClaudeProjectedFinal(double pct) => IsKorean
+        ? $"리셋 시점 예상 사용률: 약 {pct:F0}%"
+        : $"Projected usage at reset: ~{pct:F0}%";
+
+    public static string ClaudeResetIn(TimeSpan remaining) => IsKorean
+        ? $"{(int)remaining.TotalHours}시간 {remaining.Minutes}분 후 초기화"
+        : $"Resets in {(int)remaining.TotalHours}h {remaining.Minutes}m";
+
+    public static string ClaudeWindowUsage(double used, double window) => IsKorean
+        ? $"{used:F0}% 사용 / {window:F0}% 경과"
+        : $"{used:F0}% used / {window:F0}% elapsed";
+
+    // Claude Settings
+    public static string ClaudeSettingsTitle  => IsKorean ? "Claude 설정" : "Claude Settings";
+    public static string ClaudeAuthMethod     => IsKorean ? "인증 방법" : "Auth Method";
+    public static string ClaudeCliPathLabel   => IsKorean ? "Claude CLI 경로 (선택)" : "Claude CLI Path (optional)";
+    public static List<string> ClaudeAuthItems => IsKorean
+        ? ["자동 (OAuth → CLI)", "OAuth만", "CLI만"]
+        : ["Auto (OAuth → CLI)", "OAuth Only", "CLI Only"];
+    public static string CheckClaudeAuth      => IsKorean ? "Claude 인증 확인" : "Check Claude auth";
+    public static string ClaudeAuthDesc       => IsKorean
+        ? "Claude CLI 또는 OAuth 토큰이 정상 인증되어 있는지 확인합니다."
+        : "Verifies Claude CLI or OAuth token authentication status.";
+    public static string ClaudeAuthenticated  => IsKorean ? "✓ Claude 인증됨" : "✓ Claude authenticated";
+    public static string ClaudeNotAuth        => IsKorean ? "✗ 인증 없음" : "✗ Not authenticated";
+
     // --- Format methods ---
     public static string LastRefreshed(DateTime dt) => IsKorean
         ? $"마지막 갱신: {dt:HH:mm:ss}"

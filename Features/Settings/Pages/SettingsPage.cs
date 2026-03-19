@@ -17,6 +17,7 @@ class SettingsState
     public string ClaudeCliPath { get; set; } = "";
     public string ClaudeStatus { get; set; } = "";
     public bool IsCheckingClaude { get; set; }
+    public int AutoRefreshInterval { get; set; }
 }
 
 partial class SettingsPage : Component<SettingsState>
@@ -36,6 +37,7 @@ partial class SettingsPage : Component<SettingsState>
             s.LanguagePreference = settings.LanguagePreference;
             s.ClaudeAuthMethod = settings.ClaudeAuthMethod;
             s.ClaudeCliPath = settings.ClaudeCliPath;
+            s.AutoRefreshInterval = settings.AutoRefreshInterval;
         });
     }
 
@@ -143,6 +145,14 @@ partial class SettingsPage : Component<SettingsState>
                                 var settings = IPlatformApplication.Current!.Services.GetRequiredService<SettingsService>();
                                 settings.ThemePreference = idx;
                                 SettingsService.ApplyTheme(idx);
+                            })
+                        ),
+                        FieldRow(AppStrings.AutoRefresh,
+                            StyledPicker(AppStrings.AutoRefreshItems, State.AutoRefreshInterval, idx =>
+                            {
+                                SetState(s => s.AutoRefreshInterval = idx);
+                                var settings = IPlatformApplication.Current!.Services.GetRequiredService<SettingsService>();
+                                settings.AutoRefreshInterval = idx;
                             })
                         )
                     ).Spacing(10).Padding(14, 12)

@@ -12,12 +12,14 @@ class ClaudeDashBoardPageState
     public string? Error { get; set; }
     public ClaudeUsageSnapshot? Snapshot { get; set; }
     public DateTime LastRefreshed { get; set; }
+    public int AutoRefreshIntervalMs { get; set; }
 }
 
 partial class ClaudeDashBoardPage : Component<ClaudeDashBoardPageState>
 {
     [Inject] ClaudeUsageService _claudeUsageService;
     [Inject] NotificationService _notificationService;
+    [Inject] SettingsService _settingsService;
 
     [Param] IParameter<MainLayoutState> _providerStateParam;
 
@@ -37,8 +39,20 @@ partial class ClaudeDashBoardPage : Component<ClaudeDashBoardPageState>
                 })
                 .ToArray();
         });
+
+        SetState(s => s.AutoRefreshIntervalMs = SettingsService.GetAutoRefreshIntervalMs(_settingsService.AutoRefreshInterval));
+        SettingsService.AutoRefreshIntervalChanged += OnAutoRefreshIntervalChanged;
         await LoadData();
     }
+
+    protected override void OnWillUnmount()
+    {
+        SettingsService.AutoRefreshIntervalChanged -= OnAutoRefreshIntervalChanged;
+        base.OnWillUnmount();
+    }
+
+    void OnAutoRefreshIntervalChanged(object? sender, EventArgs e)
+        => SetState(s => s.AutoRefreshIntervalMs = SettingsService.GetAutoRefreshIntervalMs(_settingsService.AutoRefreshInterval));
 
     async Task LoadData()
     {
@@ -73,7 +87,11 @@ partial class ClaudeDashBoardPage : Component<ClaudeDashBoardPageState>
                         Label(DateTime.Today.ToString(AppStrings.DateFormat))
                             .FontSize(12)
                             .TextColor(AppColors.TextSecondary)
-                    ).Spacing(2)
+                    ).Spacing(2),
+                    Timer()
+                        .IsEnabled(!State.IsLoading && State.AutoRefreshIntervalMs > 0)
+                        .Interval(State.AutoRefreshIntervalMs > 0 ? State.AutoRefreshIntervalMs : 60_000)
+                        .OnTick(() => _ = LoadData())
                 ),
                 Grid(RenderBody()).GridRow(1)
             )

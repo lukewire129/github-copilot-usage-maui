@@ -204,6 +204,8 @@ class ClaudeUsageService
         if (resetsAt is null) return "";
         var remaining = resetsAt.Value - DateTime.UtcNow;
         if (remaining <= TimeSpan.Zero) return "Resetting...";
+        if (remaining.TotalDays >= 1)
+            return $"{(int)remaining.TotalDays}d {remaining.Hours}h {remaining.Minutes}m";
         if (remaining.TotalHours >= 1)
             return $"{(int)remaining.TotalHours}h {remaining.Minutes}m";
         return $"{remaining.Minutes}m";

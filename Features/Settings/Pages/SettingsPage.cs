@@ -1,6 +1,8 @@
 using copilot_usage_maui.Services;
+using copilot_usage_maui.SettingsComponents;
+using ReactorRouter.Navigation;
 
-namespace copilot_usage_maui.Components;
+namespace copilot_usage_maui.Features.Settings.Pages;
 
 class SettingsState
 {
@@ -14,13 +16,8 @@ class SettingsState
 
 partial class SettingsPage : Component<SettingsState>
 {
-    Action? _onBack;
 
-    public SettingsPage OnBack(Action action)
-    {
-        _onBack = action;
-        return this;
-    }
+    [Inject] GitHubCopilotService _gitHubCopilotService;
 
     protected override void OnMounted()
     {
@@ -47,8 +44,7 @@ partial class SettingsPage : Component<SettingsState>
         SetState(s => { s.IsCheckingGh = true; s.GhStatus = ""; });
         try
         {
-            var service = IPlatformApplication.Current!.Services.GetRequiredService<GitHubCopilotService>();
-            string token = await service.GetGhTokenAsync();
+            string token = await _gitHubCopilotService.GetGhTokenAsync();
             SetState(s =>
             {
                 s.GhStatus = token.Length > 0 ? AppStrings.GhAuthenticated : AppStrings.GhNoToken;
@@ -87,12 +83,12 @@ partial class SettingsPage : Component<SettingsState>
         ).Spacing(4);
 
     public override VisualNode Render()
-        => ContentPage(
+        => ContentView(
             VStack(
                 // Header
                 Grid("48", "48, *, 48",
                     Button("←")
-                        .OnClicked(() => _onBack?.Invoke())
+                        .OnClicked(() => NavigationService.Instance.GoBack())
                         .BackgroundColor(Colors.Transparent)
                         .TextColor(AppColors.Accent)
                         .FontSize(20)

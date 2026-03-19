@@ -1,11 +1,7 @@
-using MauiReactor;
-using MauiReactor.HotReload;
-using copilot_usage_maui.Components;
-using copilot_usage_maui.Resources.Styles;
 using copilot_usage_maui.Services;
-using Microsoft.Extensions.Logging;
-using Microsoft.Maui.Hosting;
-using Microsoft.Maui.LifecycleEvents;
+using ReactorRouter;
+using ReactorRouter.Routing;
+using SkiaSharp.Views.Maui.Controls.Hosting;
 
 namespace copilot_usage_maui
 {
@@ -15,14 +11,29 @@ namespace copilot_usage_maui
         {
             var builder = MauiApp.CreateBuilder();
             builder
-                .UseMauiReactorApp<AppShell>(app =>
+                .UseMauiReactorApp<App>(app =>
                     {
                         app.UseTheme<ApplicationTheme>();
                     },
                     unhandledExceptionAction: e =>
                     {
                         System.Diagnostics.Debug.WriteLine(e.ExceptionObject);
-                    })
+                    }
+                )
+                .UseSkiaSharp()
+                .UseReactorRouter((r) =>
+                {
+                    r.Routes(
+                        new RouteDefinition("/", typeof(Shared.Layouts.RootLayout),
+                        new RouteDefinition("ai", typeof(Shared.Layouts.MainLayout),
+                            new RouteDefinition("githubcopilot", typeof(Features.GithubCopilot.Pages.GithubDashBoardPage)),
+                            new RouteDefinition("claude", typeof(Features.Claude.Pages.ClaudeDashBoardPage))
+                        ),
+                    new RouteDefinition("settings", typeof(copilot_usage_maui.Features.Settings.Pages.SettingsPage))
+                    ));
+
+                    r.InitialPath("/ai/githubcopilot");
+                })
                 .ConfigureFonts(fonts =>
                 {
                     fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");

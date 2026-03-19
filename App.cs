@@ -1,15 +1,16 @@
 using copilot_usage_maui.Services;
+using ReactorRouter.Components;
+using ReactorRouter.Routing;
 
-namespace copilot_usage_maui.Components;
+namespace copilot_usage_maui;
 
-class AppShellState
+class AppState
 {
-    public bool ShowSettings { get; set; }
     public AppTheme CurrentTheme { get; set; }
     public int AppVersion { get; set; }
 }
 
-partial class AppShell : Component<AppShellState>
+partial class App : Component<AppState>
 {
     protected override void OnMounted()
     {
@@ -37,13 +38,9 @@ partial class AppShell : Component<AppShellState>
 
     public override VisualNode Render()
         => Window(
-        State.ShowSettings
-            ? new SettingsPage()
-                .OnBack(() => SetState(s => s.ShowSettings = false))
-            : new DashboardPage()
-                .OnOpenSettings(() => SetState(s => s.ShowSettings = true))
-        )
-        .Title("GitHub Copilot Usage")
-        .Width(450)
-        .Height(900);
+                ContentPage(new Router())
+           )
+           .Title("GitHub Copilot Usage")
+           .Width(450)
+           .Height(900);
 }

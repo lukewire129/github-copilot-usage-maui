@@ -38,14 +38,20 @@
 		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
 	</ItemGroup>
 	<ItemGroup>
-		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="9.0.14" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.5" />
 		<PackageReference Include="Microsoft.Maui.Controls" Version="9.0.120" />
 		<PackageReference Include="Reactor.Maui" Version="3.0.40" />
+		<PackageReference Include="ReactorRouter" Version="0.3.0" />
+		<PackageReference Include="SkiaSharp.Views.Maui.Controls" Version="3.119.2" />
+		<PackageReference Include="Svg.Skia" Version="3.6.0" />
 	</ItemGroup>
 	<ItemGroup Condition="'$(Configuration)'=='Debug'">
 		<RuntimeHostConfigurationOption Include="MauiReactor.HotReload" Value="true" Trim="false" />
 	</ItemGroup>
 	<ItemGroup Condition="'$(Configuration)'=='Release'">
 		<RuntimeHostConfigurationOption Include="MauiReactor.HotReload" Value="false" Trim="true" />
+	</ItemGroup>
+	<ItemGroup>
+	  <Folder Include="Features\GithubCopilot\Components\" />
 	</ItemGroup>
 </Project>

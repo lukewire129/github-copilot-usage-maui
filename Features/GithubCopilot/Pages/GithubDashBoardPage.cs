@@ -1,12 +1,15 @@
 using copilot_usage_maui.Models;
 using copilot_usage_maui.Services;
+using copilot_usage_maui.Shared.Layouts;
+using MauiReactor.Parameters;
+
 #if WINDOWS
 using System.Runtime.InteropServices;
 #endif
 
-namespace copilot_usage_maui.Components;
+namespace copilot_usage_maui.Features.GithubCopilot.Pages;
 
-class DashboardState
+class GithubDashBoardPageState
 {
     public bool IsLoading { get; set; } = true;
     public string? Error { get; set; }
@@ -18,7 +21,7 @@ class DashboardState
     public bool ShowAuthPanel { get; set; }
 }
 
-partial class DashboardPage : Component<DashboardState>
+partial class GithubDashBoardPage : Component<GithubDashBoardPageState>
 {
 #if WINDOWS
     [DllImport("user32.dll", SetLastError = true)]
@@ -72,16 +75,23 @@ partial class DashboardPage : Component<DashboardState>
     [Inject] GitHubCopilotService _gitHubCopilotService;
     [Inject] SettingsService _settingsService;
 
-    Action? _onOpenSettings;
-    public DashboardPage OnOpenSettings(Action action)
-    {
-        _onOpenSettings = action;
-        return this;
-    }
+    [Param] IParameter<MainLayoutState> _providerStateParam;
 
     protected override async void OnMounted()
     {
         base.OnMounted();
+        _providerStateParam.Set(p =>
+        {
+            p.Providers = p.Providers
+            .Select(x => new ProviderState
+            {
+                Name = x.Name,
+                Icon = x.Icon,
+                Url = x.Url,
+                IsSelected = x.Url == "/ai/githubcopilot"
+            })
+            .ToArray();
+        });
         await LoadData();
     }
 
@@ -144,9 +154,8 @@ partial class DashboardPage : Component<DashboardState>
     }
 
     public override VisualNode Render()
-        => ContentPage(
-            ScrollView(
-                VStack(
+        => ScrollView(
+                Grid("auto,auto,*", "*",
                     // Header
                     Grid("Auto", "*, Auto",
                         VStack(
@@ -157,42 +166,24 @@ partial class DashboardPage : Component<DashboardState>
                                 .FontSize(12)
                                 .TextColor(AppColors.TextSecondary)
                         ).Spacing(2),
-                        HStack(
-                            State.IsLoading
-                                ? (VisualNode)ActivityIndicator()
-                                    .IsRunning(true)
-                                    .WidthRequest(32)
-                                    .HeightRequest(32)
-                                    .VCenter()
-                                : Button("⟳")
-                                    .OnClicked(async () => await LoadData())
-                                    .BackgroundColor(Colors.Transparent)
-                                    .TextColor(AppColors.TextSecondary)
-                                    .WidthRequest(40)
-                                    .HeightRequest(44),
-                            Button("🔑")
-                                .OnClicked(() => SetState(s => { s.ShowAuthPanel = !s.ShowAuthPanel; s.AuthRefreshOutput = null; }))
-                                .BackgroundColor(Colors.Transparent)
-                                .TextColor(State.ShowAuthPanel ? AppColors.Accent : AppColors.TextSecondary)
-                                .WidthRequest(45)
-                                .HeightRequest(44),
-                            Button("⚙")
-                                .OnClicked(() => _onOpenSettings?.Invoke())
-                                .BackgroundColor(Colors.Transparent)
-                                .TextColor(AppColors.TextSecondary)
-                                .WidthRequest(45)
-                                .HeightRequest(44)
-                        )
-                        .GridColumn(1)
-                        .VCenter()
+                        Button("🔑")
+                            .OnClicked(() => SetState(s => { s.ShowAuthPanel = !s.ShowAuthPanel; s.AuthRefreshOutput = null; }))
+                            .BackgroundColor(Colors.Transparent)
+                            .TextColor(State.ShowAuthPanel ? AppColors.Accent : AppColors.TextSecondary)
+                            .WidthRequest(45)
+                            .HeightRequest(44)
+                            .GridColumn(1)
+                            .VCenter()
                     ),
-                    State.ShowAuthPanel ? RenderAuthPanel() : new Label().HeightRequest(0),
-                    RenderBody()   // ← 항상 렌더링
+                    State.ShowAuthPanel ? Grid(RenderAuthPanel()).GridRow(1) : new Label().HeightRequest(0).GridRow(1),
+                    Grid(
+                        RenderBody()   // ← 항상 렌더링
+                    )
+                    .GridRow(2)
                 )
-                .Spacing(20)
+                .RowSpacing(20)
                 .Padding(24, 20)
-            )
-        );
+            );
 
     VisualNode RenderAuthPanel()
         => Border(
@@ -263,11 +254,26 @@ partial class DashboardPage : Component<DashboardState>
     VisualNode RenderBody()
     {
         if (State.IsLoading && State.Summary == null)
-            return ActivityIndicator().IsRunning(true).HCenter().VCenter();
+            return ActivityIndicator()
+                        .IsRunning(true)
+                        .Center();
 
         if (State.Error != null)
             return SectionCard(
                 VStack(
+                    HStack(
+                        Label(AppStrings.LastRefreshed(State.LastRefreshed))
+                            .FontSize(11)
+                            .VCenter()
+                            .TextColor(AppColors.TextSecondary),
+                        Button("⟳")
+                            .OnClicked(async () => await LoadData())
+                            .BackgroundColor(Colors.Transparent)
+                            .TextColor(AppColors.TextSecondary)
+                            .WidthRequest(40)
+                            .HeightRequest(44)
+                    )
+                    .HEnd(),
                     Label(AppStrings.LoadFailed).FontSize(15).FontAttributes(MauiControls.FontAttributes.Bold).HCenter(),
                     Label(State.Error).TextColor(AppColors.StatusError).HCenter().HorizontalTextAlignment(TextAlignment.Center).FontSize(13),
                     Label(AppStrings.AuthHint).FontSize(12).TextColor(AppColors.TextSecondary).HCenter(),
@@ -277,12 +283,21 @@ partial class DashboardPage : Component<DashboardState>
 
         var s = State.Summary!;
         return VStack(
+            HStack(
+                Label(AppStrings.LastRefreshed(State.LastRefreshed))
+                    .FontSize(11)
+                    .VCenter()
+                    .TextColor(AppColors.TextSecondary),
+                Button("⟳")
+                    .OnClicked(async () => await LoadData())
+                    .BackgroundColor(Colors.Transparent)
+                    .TextColor(AppColors.TextSecondary)
+                    .WidthRequest(40)
+                    .HeightRequest(44)
+            )
+            .HEnd(),
             SectionCard(RenderUsageCard(s)),
-            SectionCard(RenderModelBreakdown(s)),
-            Label(AppStrings.LastRefreshed(State.LastRefreshed))
-                .FontSize(11)
-                .TextColor(AppColors.TextSecondary)
-                .HEnd()
+            SectionCard(RenderModelBreakdown(s))
         )
         .Spacing(16)
         .Opacity(State.IsLoading ? 0.5 : 1.0);

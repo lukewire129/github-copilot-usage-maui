@@ -1,6 +1,4 @@
-using Microsoft.Maui.Controls;
-
-namespace copilot_usage_maui.Components;
+namespace copilot_usage_maui.SettingsComponents;
 
 class CustomDropDownState
 {

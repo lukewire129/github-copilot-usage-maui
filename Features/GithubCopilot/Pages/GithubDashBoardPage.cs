@@ -19,6 +19,7 @@ class GithubDashBoardPageState
     public string? AuthRefreshOutput { get; set; }
     public string? AuthDeviceCode { get; set; }
     public bool ShowAuthPanel { get; set; }
+    public int AutoRefreshIntervalMs { get; set; }
 }
 
 partial class GithubDashBoardPage : Component<GithubDashBoardPageState>
@@ -92,8 +93,20 @@ partial class GithubDashBoardPage : Component<GithubDashBoardPageState>
             })
             .ToArray();
         });
+
+        SetState(s => s.AutoRefreshIntervalMs = SettingsService.GetAutoRefreshIntervalMs(_settingsService.AutoRefreshInterval));
+        SettingsService.AutoRefreshIntervalChanged += OnAutoRefreshIntervalChanged;
         await LoadData();
     }
+
+    protected override void OnWillUnmount()
+    {
+        SettingsService.AutoRefreshIntervalChanged -= OnAutoRefreshIntervalChanged;
+        base.OnWillUnmount();
+    }
+
+    void OnAutoRefreshIntervalChanged(object? sender, EventArgs e)
+        => SetState(s => s.AutoRefreshIntervalMs = SettingsService.GetAutoRefreshIntervalMs(_settingsService.AutoRefreshInterval));
 
     async Task RunAuthRefresh()
     {
@@ -176,6 +189,10 @@ partial class GithubDashBoardPage : Component<GithubDashBoardPageState>
                             .VCenter()
                     ),
                     State.ShowAuthPanel ? Grid(RenderAuthPanel()).GridRow(1) : new Label().HeightRequest(0).GridRow(1),
+                    Timer()
+                        .IsEnabled(!State.IsLoading && State.AutoRefreshIntervalMs > 0)
+                        .Interval(State.AutoRefreshIntervalMs > 0 ? State.AutoRefreshIntervalMs : 60_000)
+                        .OnTick(() => _ = LoadData()),
                     Grid(
                         RenderBody()   // ← 항상 렌더링
                     )

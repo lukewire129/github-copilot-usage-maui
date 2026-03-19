@@ -57,6 +57,11 @@ static class AppStrings
     public static string GhAuthenticated => IsKorean ? "✓ gh CLI 인증됨" : "✓ gh CLI authenticated";
     public static string GhNoToken       => IsKorean ? "✗ 토큰 없음" : "✗ No token found";
 
+    public static string AutoRefresh => IsKorean ? "자동 새로고침" : "Auto Refresh";
+    public static List<string> AutoRefreshItems => IsKorean
+        ? ["안함", "10분", "30분", "1시간"]
+        : ["Off", "10 min", "30 min", "1 hour"];
+
     // Picker item lists
     public static List<string> ThemeItems => IsKorean
         ? ["시스템 기본값", "라이트", "다크"]

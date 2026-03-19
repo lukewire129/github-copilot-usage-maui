@@ -58,4 +58,27 @@ class SettingsService
             LanguageChanged?.Invoke(null, EventArgs.Empty);
         }
     }
+
+    const string KeyAutoRefreshInterval = "auto_refresh_interval";
+
+    public static event EventHandler? AutoRefreshIntervalChanged;
+
+    // 0=Off, 1=10분, 2=30분, 3=1시간
+    public int AutoRefreshInterval
+    {
+        get => Preferences.Default.Get(KeyAutoRefreshInterval, 0);
+        set
+        {
+            Preferences.Default.Set(KeyAutoRefreshInterval, value);
+            AutoRefreshIntervalChanged?.Invoke(null, EventArgs.Empty);
+        }
+    }
+
+    public static int GetAutoRefreshIntervalMs(int index) => index switch
+    {
+        1 => (int)TimeSpan.FromMinutes(10).TotalMilliseconds,
+        2 => (int)TimeSpan.FromMinutes(30).TotalMilliseconds,
+        3 => (int)TimeSpan.FromHours(1).TotalMilliseconds,
+        _ => 0
+    };
 }

@@ -242,14 +242,14 @@ partial class GithubDashBoardPage : Component<GithubDashBoardPageState>
         .BackgroundColor(AppColors.CardBackground)
         .Stroke(Colors.Transparent)
         .StrokeThickness(0)
-        .StrokeShape(new MauiReactor.Shapes.RoundRectangle());
+        .StrokeShape(RoundRectangle());
 
     static VisualNode SectionCard(VisualNode content)
         => Border(content)
             .BackgroundColor(AppColors.CardBackground)
             .Stroke(AppColors.DividerColor)
             .StrokeThickness(1)
-            .StrokeShape(new MauiReactor.Shapes.RoundRectangle());
+            .StrokeShape(RoundRectangle());
 
     VisualNode RenderBody()
     {

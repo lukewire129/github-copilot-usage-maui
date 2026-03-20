@@ -21,6 +21,7 @@ partial class ClaudeDashBoardPage : Component<ClaudeDashBoardPageState>
     [Inject] ClaudeUsageService _claudeUsageService;
     [Inject] NotificationService _notificationService;
     [Inject] SettingsService _settingsService;
+    [Inject] WidgetService _widgetService;
 
     [Param] IParameter<MainLayoutState> _providerStateParam;
 
@@ -69,6 +70,30 @@ partial class ClaudeDashBoardPage : Component<ClaudeDashBoardPageState>
                 s.Error = null;
             });
             _notificationService.CheckAndNotify(snapshot);
+
+            // 위젯 업데이트
+            var mostRestrictive = snapshot.MostRestrictive;
+            if (mostRestrictive is not null)
+            {
+                var resetLabel = mostRestrictive.TimeUntilReset is { } tr && tr > TimeSpan.Zero
+                    ? AppStrings.ClaudeResetIn(tr) : "";
+
+                // 5시간 세션 윈도우 정보
+                var session = snapshot.SessionWindow;
+                string? sessionResetText = null;
+                if (session?.TimeUntilReset is { } str && str > TimeSpan.Zero)
+                    sessionResetText = AppStrings.ClaudeResetIn(str);
+
+                _widgetService.Update(new WidgetData
+                {
+                    ProviderName = "Claude",
+                    IconFileName = "providericon_claude.svg",
+                    UsedPercent = mostRestrictive.UsedPercent,
+                    ResetTimeText = resetLabel,
+                    SessionUsedPercent = session?.UsedPercent,
+                    SessionResetText = sessionResetText
+                });
+            }
         }
         catch (ClaudeTokenExpiredException ex)
         {

@@ -154,4 +154,9 @@ static class AppStrings
     public static string AuthError(string message) => IsKorean
         ? $"오류: {message}"
         : $"Error: {message}";
+
+    // Widget
+    public static string StatusBarDaysLeft(int days) => IsKorean
+        ? $"{days}일 후 초기화"
+        : $"Resets in {days}d";
 }

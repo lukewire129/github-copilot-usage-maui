@@ -44,7 +44,12 @@
       "Bash(powershell.exe -NoProfile -Command \"Get-ChildItem -Path ''''$env:LOCALAPPDATA'''' -Recurse -Filter ''''claude.exe'''' -ErrorAction SilentlyContinue | Select-Object FullName\")",
       "Read(//c/Users/dm/source/repos/_personal/copilot-usage-maui/$USERPROFILE/.local/bin/**)",
       "Read(//c/Users/dm/source/repos/_personal/copilot-usage-maui/$USERPROFILE/.local/**)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(grep -r \"MauiWinUIApplication\\\\|WindowsEnvironment\\\\|MainWindow\\\\|IntPtr\\\\|HwndHost\\\\|HWND\" C:Usersdmsourcerepos_personalcopilot-usage-maui --include=*.cs)",
+      "Bash(grep -r \"DllImport\\\\|Win32\\\\|kernel32\\\\|user32\\\\|shell32\" . --include=*.cs)",
+      "Bash(gh api:*)",
+      "Bash(python3 -c \"import json,sys; data=json.load\\(sys.stdin\\); [print\\(t[''''path'''']\\) for t in data[''''tree''''] if t[''''path''''].endswith\\(''''.cs''''\\)]\")",
+      "Bash(grep '\\\\.cs$')"
     ]
   }
 }

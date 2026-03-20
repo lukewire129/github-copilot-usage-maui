@@ -75,6 +75,7 @@ partial class GithubDashBoardPage : Component<GithubDashBoardPageState>
 
     [Inject] GitHubCopilotService _gitHubCopilotService;
     [Inject] SettingsService _settingsService;
+    [Inject] WidgetService _widgetService;
 
     [Param] IParameter<MainLayoutState> _providerStateParam;
 
@@ -154,6 +155,15 @@ partial class GithubDashBoardPage : Component<GithubDashBoardPageState>
                 s.IsLoading = false;
                 s.LastRefreshed = DateTime.Now;
                 s.Error = null;
+            });
+
+            // 위젯 업데이트
+            _widgetService.Update(new WidgetData
+            {
+                ProviderName = "Copilot",
+                IconFileName = "providericon_copilot.svg",
+                UsedPercent = summary.PercentConsumed,
+                ResetTimeText = AppStrings.StatusBarDaysLeft(summary.DaysRemaining)
             });
         }
         catch (Exception ex)

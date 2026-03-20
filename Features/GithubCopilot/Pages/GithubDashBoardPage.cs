@@ -190,9 +190,14 @@ partial class GithubDashBoardPage : Component<GithubDashBoardPageState>
                     ),
                     State.ShowAuthPanel ? Grid(RenderAuthPanel()).GridRow(1) : new Label().HeightRequest(0).GridRow(1),
                     Timer()
-                        .IsEnabled(!State.IsLoading && State.AutoRefreshIntervalMs > 0)
-                        .Interval(State.AutoRefreshIntervalMs > 0 ? State.AutoRefreshIntervalMs : 60_000)
-                        .OnTick(() => _ = LoadData()),
+                       .IsEnabled(!State.IsLoading
+                                && State.AutoRefreshIntervalMs > 0)
+                        .Interval(10_000)
+                        .OnTick(() =>
+                        {
+                            if (DateTime.Now - State.LastRefreshed >= TimeSpan.FromMilliseconds(State.AutoRefreshIntervalMs))
+                                _ = LoadData();
+                        }),
                     Grid(
                         RenderBody()   // ← 항상 렌더링
                     )

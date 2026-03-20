@@ -2,7 +2,7 @@
 
 [🇰🇷 한국어로 보기 (Read in Korean)](README.ko.md)
 
-A cross-platform application built with .NET MAUI and MauiReactor to monitor and analyze your GitHub Copilot usage. It provides a dashboard for daily Copilot usage, model-specific statistics, remaining quota, and more.
+A cross-platform application built with .NET MAUI and MauiReactor to monitor and analyze your **GitHub Copilot** and **Claude Code** usage. It provides a dashboard for daily usage, model-specific statistics, remaining quota, and more.
 
 ## ⚠️ Prerequisites
 
@@ -22,10 +22,7 @@ gh auth login -h github.com -s user -w
 ```
 > 💡 **Important:** To access the Copilot Billing API used by this app, the `user` scope permission is strictly required in addition to the default permissions. Logging in with the `-s user` option ensures you can retrieve the correct information. The app also features an in-app permission refresh function (🔑 button).
 
-### 3. Configure Quota Limit
-Currently, the GitHub API does not provide an endpoint to fetch the total Copilot quota limit for an individual user. Therefore, you must **manually enter your monthly quota limit in the Settings page (⚙️)** of this application to see accurate remaining quota and pace projections. 
-
-### 4. Development Environment
+### 3. Development Environment
 - .NET 9.0 SDK or higher
 - .NET MAUI workload (`dotnet workload install maui`)
 
@@ -37,6 +34,9 @@ Currently, the GitHub API does not provide an endpoint to fetch the total Copilo
 - **Goal vs. Trend:** Projects month-end usage based on current pace and estimates exactly when the quota will run out.
 - **Model Usage Breakdown:** Analyzes the ratio (%) of models used in the backend, such as GPT-4 and GPT-3.5.
 - **In-App Auth Management:** Supports the `gh auth refresh` workflow directly via an in-app panel when your token or permissions expire.
+- **Claude Code Support:** Monitor usage and statistics for Claude Code alongside GitHub Copilot.
+- **Auto-Refresh:** Automatically refreshes data every 10m, 30m, or 1h.
+- **System Tray Support:** Minimize to the system tray/taskbar for quick access and background monitoring.
 
 ## 🚀 Build and Run
 

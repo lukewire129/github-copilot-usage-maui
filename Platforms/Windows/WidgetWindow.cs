@@ -18,9 +18,12 @@ namespace copilot_usage_maui.Platforms.Windows;
 public class WidgetWindow
 {
     readonly WidgetService _widgetService;
+    readonly MainWindowService? _mainWindowService;
     MUX.Window? _window;
     AppWindow? _appWindow;
     IntPtr _hwnd;
+
+    public IntPtr Hwnd => _hwnd;
 
     // UI elements
     WinControls.TextBlock? _providerText;
@@ -47,9 +50,10 @@ public class WidgetWindow
     // Context menu
     WinControls.MenuFlyout? _contextMenu;
 
-    public WidgetWindow(WidgetService widgetService)
+    public WidgetWindow(WidgetService widgetService, MainWindowService? mainWindowService)
     {
         _widgetService = widgetService;
+        _mainWindowService = mainWindowService;
     }
 
     public void Show()
@@ -425,14 +429,14 @@ public class WidgetWindow
 
         _contextMenu.Items.Add(new WinControls.MenuFlyoutSeparator());
 
-        // ── Open Dashboard ──
-        var showItem = new WinControls.MenuFlyoutItem
+        // ── Refresh ──
+        var refreshItem = new WinControls.MenuFlyoutItem
         {
-            Text = "Open Dashboard",
-            Icon = new WinControls.FontIcon { Glyph = "\uE8A7" },
+            Text = "Refresh",
+            Icon = new WinControls.FontIcon { Glyph = "\uE72C" },
         };
-        showItem.Click += (_, _) => ShowMainWindow();
-        _contextMenu.Items.Add(showItem);
+        refreshItem.Click += async (_, _) => await _widgetService.RequestRefreshAsync();
+        _contextMenu.Items.Add(refreshItem);
 
         _contextMenu.Items.Add(new WinControls.MenuFlyoutSeparator());
 
@@ -444,9 +448,7 @@ public class WidgetWindow
         };
         quitItem.Click += (_, _) =>
         {
-            if (MUX.Application.Current is copilot_usage_maui.WinUI.App winApp)
-                winApp.SetQuitting();
-
+            _mainWindowService?.SetQuitting();
             Close();
             Microsoft.Maui.Controls.Application.Current?.Quit();
         };
@@ -617,7 +619,7 @@ public class WidgetWindow
 
     void OnWidgetTapped(object sender, TappedRoutedEventArgs e)
     {
-        ShowMainWindow();
+        _mainWindowService?.Toggle();
     }
 
     void OnWidgetRightTapped(object sender, RightTappedRoutedEventArgs e)
@@ -628,34 +630,6 @@ public class WidgetWindow
         if (_contentRoot is MUX.FrameworkElement fe)
         {
             _contextMenu!.ShowAt(fe, e.GetPosition(fe));
-        }
-    }
-
-    void ShowMainWindow()
-    {
-        var mainWindow = Microsoft.Maui.Controls.Application.Current?.Windows.FirstOrDefault();
-        if (mainWindow is null) return;
-
-        if (mainWindow.Handler?.PlatformView is MUX.Window mainWinUI)
-        {
-            var mainHwnd = WindowNative.GetWindowHandle(mainWinUI);
-            var mainWindowId = Win32Interop.GetWindowIdFromWindow(mainHwnd);
-            var mainAppWindow = AppWindow.GetFromWindowId(mainWindowId);
-
-            // 시작 표시줄 복원 + 창 표시
-            if (MUX.Application.Current is copilot_usage_maui.WinUI.App winApp)
-            {
-                winApp.RestoreMainWindow(mainHwnd);
-            }
-
-            // Restore if minimized
-            if (IsIconic(mainHwnd))
-            {
-                ShowWindow(mainHwnd, SW_RESTORE);
-            }
-
-            mainAppWindow.Show(true);
-            SetForegroundWindow(mainHwnd);
         }
     }
 
@@ -696,65 +670,24 @@ public class WidgetWindow
     const uint SWP_NOZORDER = 0x0004;
     const uint SWP_NOACTIVATE = 0x0010;
     const uint SWP_FRAMECHANGED = 0x0020;
-    const int SW_SHOW = 5;
-    const int SW_RESTORE = 9;
 
-    [DllImport("user32.dll")]
-    static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+    [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+    [DllImport("user32.dll")] static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr FindWindow(string? lpClassName, string? lpWindowName);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr FindWindowEx(IntPtr hWndParent, IntPtr hWndChildAfter, string? lpszClass, string? lpszWindow);
+    [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+    [DllImport("user32.dll")] static extern IntPtr SetParent(IntPtr hWndChild, IntPtr hWndNewParent);
+    [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+    [DllImport("gdi32.dll")] static extern IntPtr CreateRectRgn(int nLeftRect, int nTopRect, int nRightRect, int nBottomRect);
+    [DllImport("user32.dll")] static extern int SetWindowRgn(IntPtr hWnd, IntPtr hRgn, bool bRedraw);
+    [DllImport("user32.dll")] static extern uint GetDpiForWindow(IntPtr hwnd);
 
-    [DllImport("user32.dll")]
-    static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
-
-    [DllImport("user32.dll")]
-    static extern bool SetForegroundWindow(IntPtr hWnd);
-
-    [DllImport("user32.dll")]
-    static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-
-    [DllImport("user32.dll")]
-    static extern bool IsWindowVisible(IntPtr hWnd);
-
-    [DllImport("user32.dll")]
-    static extern bool IsIconic(IntPtr hWnd);
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    static extern IntPtr FindWindow(string? lpClassName, string? lpWindowName);
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    static extern IntPtr FindWindowEx(IntPtr hWndParent, IntPtr hWndChildAfter,
-        string? lpszClass, string? lpszWindow);
-
-    [DllImport("user32.dll")]
-    static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
-
-    [DllImport("user32.dll")]
-    static extern IntPtr SetParent(IntPtr hWndChild, IntPtr hWndNewParent);
-
-    [DllImport("user32.dll")]
-    static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter,
-        int X, int Y, int cx, int cy, uint uFlags);
-
-    [DllImport("gdi32.dll")]
-    static extern IntPtr CreateRectRgn(int nLeftRect, int nTopRect, int nRightRect, int nBottomRect);
-
-    [DllImport("user32.dll")]
-    static extern int SetWindowRgn(IntPtr hWnd, IntPtr hRgn, bool bRedraw);
-
-    [DllImport("user32.dll")]
-    static extern uint GetDpiForWindow(IntPtr hwnd);
-
-    // DWM - Window chrome color control
-    const int DWMWA_CAPTION_COLOR = 35;
     const int DWMWA_BORDER_COLOR = 34;
-
     [DllImport("dwmapi.dll", PreserveSig = true)]
     static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int pvAttribute, int cbAttribute);
 
     [StructLayout(LayoutKind.Sequential)]
-    struct RECT
-    {
-        public int left, top, right, bottom;
-    }
+    struct RECT { public int left, top, right, bottom; }
 
     #endregion
 }

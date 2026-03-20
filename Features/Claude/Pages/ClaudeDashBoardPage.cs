@@ -44,14 +44,18 @@ partial class ClaudeDashBoardPage : Component<ClaudeDashBoardPageState>
 
         SetState(s => s.AutoRefreshIntervalMs = SettingsService.GetAutoRefreshIntervalMs(_settingsService.AutoRefreshInterval));
         SettingsService.AutoRefreshIntervalChanged += OnAutoRefreshIntervalChanged;
+        _widgetService.RefreshRequested += OnWidgetRefreshRequested;
         await LoadData();
     }
 
     protected override void OnWillUnmount()
     {
         SettingsService.AutoRefreshIntervalChanged -= OnAutoRefreshIntervalChanged;
+        _widgetService.RefreshRequested -= OnWidgetRefreshRequested;
         base.OnWillUnmount();
     }
+
+    async Task OnWidgetRefreshRequested() => await LoadData(forceRefresh: true);
 
     void OnAutoRefreshIntervalChanged(object? sender, EventArgs e)
         => SetState(s => s.AutoRefreshIntervalMs = SettingsService.GetAutoRefreshIntervalMs(_settingsService.AutoRefreshInterval));

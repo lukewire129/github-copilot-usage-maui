@@ -22,6 +22,7 @@ description: "Develop MauiReactor 3.x applications - a declarative UI component 
 | 6 | `references/06-navigation.md` | Basic navigation, Props 전달, NavigationPage |
 | 7 | `references/07-scaffold.md` | **[Scaffold] 서드파티 컨트롤 래핑** (Syncfusion, Telerik 등) |
 | 8 | `references/08-patterns.md` | Form, List, Loading State, 디버깅 팁 |
+| 9 | `references/09-hidden-components.md` | 문서에서 찾기 어려운 컴포넌트 모음 (Timer 등) |
 
 ---
 
@@ -38,6 +39,7 @@ description: "Develop MauiReactor 3.x applications - a declarative UI component 
 "페이지 이동/뒤로가기"             → 06-navigation.md
 "Syncfusion/Telerik 컨트롤 쓰기"  → 07-scaffold.md
 "폼 처리/리스트/로딩"              → 08-patterns.md
+"Timer/잘 모르는 컴포넌트"        → 09-hidden-components.md
 ```
 
 ---

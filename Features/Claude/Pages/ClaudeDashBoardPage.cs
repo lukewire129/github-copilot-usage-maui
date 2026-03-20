@@ -10,6 +10,7 @@ class ClaudeDashBoardPageState
 {
     public bool IsLoading { get; set; } = true;
     public string? Error { get; set; }
+    public bool IsTokenExpired { get; set; }
     public ClaudeUsageSnapshot? Snapshot { get; set; }
     public DateTime LastRefreshed { get; set; }
     public int AutoRefreshIntervalMs { get; set; }
@@ -54,12 +55,12 @@ partial class ClaudeDashBoardPage : Component<ClaudeDashBoardPageState>
     void OnAutoRefreshIntervalChanged(object? sender, EventArgs e)
         => SetState(s => s.AutoRefreshIntervalMs = SettingsService.GetAutoRefreshIntervalMs(_settingsService.AutoRefreshInterval));
 
-    async Task LoadData()
+    async Task LoadData(bool forceRefresh = false)
     {
-        SetState(s => { s.IsLoading = true; s.Error = null; });
+        SetState(s => { s.IsLoading = true; s.Error = null; s.IsTokenExpired = false; });
         try
         {
-            var snapshot = await _claudeUsageService.GetUsageSnapshotAsync();
+            var snapshot = await _claudeUsageService.GetUsageSnapshotAsync(forceRefresh);
             SetState(s =>
             {
                 s.Snapshot = snapshot;
@@ -69,10 +70,33 @@ partial class ClaudeDashBoardPage : Component<ClaudeDashBoardPageState>
             });
             _notificationService.CheckAndNotify(snapshot);
         }
+        catch (ClaudeTokenExpiredException ex)
+        {
+            SetState(s => { s.Error = ex.Message; s.IsTokenExpired = true; s.IsLoading = false; });
+        }
         catch (Exception ex)
         {
             SetState(s => { s.Error = ex.Message; s.IsLoading = false; });
         }
+    }
+
+    async void OnReauthViaCli()
+    {
+        string? claudePath = ClaudeUsageService.FindClaudePath();
+        if (claudePath is null)
+        {
+            await MauiControls.Application.Current!.Windows[0].Page!
+                .DisplayAlert("Claude CLI", "Claude CLI를 찾을 수 없습니다.\nPATH에 등록되어 있는지 확인하세요.", "OK");
+            return;
+        }
+
+        var psi = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = claudePath,
+            Arguments = "auth login",
+            UseShellExecute = true,
+        };
+        System.Diagnostics.Process.Start(psi);
     }
 
     public override VisualNode Render()
@@ -104,6 +128,27 @@ partial class ClaudeDashBoardPage : Component<ClaudeDashBoardPageState>
         if (State.IsLoading && State.Snapshot is null)
             return ActivityIndicator().IsRunning(true).Center();
 
+        if (State.IsTokenExpired)
+            return SectionCard(
+                VStack(
+                    Label(AppStrings.ClaudeTokenExpired)
+                        .FontSize(15).FontAttributes(MauiControls.FontAttributes.Bold)
+                        .TextColor(AppColors.StatusWarning).HCenter()
+                        .HorizontalTextAlignment(TextAlignment.Center),
+                    Label(AppStrings.ClaudeTokenExpiredDesc)
+                        .FontSize(12).TextColor(AppColors.TextSecondary).HCenter()
+                        .HorizontalTextAlignment(TextAlignment.Center),
+                    Button(AppStrings.ClaudeReauthCli)
+                            .OnClicked(OnReauthViaCli)
+                            .HCenter(),
+                    Button(AppStrings.Retry)
+                        .OnClicked(async () => await LoadData(forceRefresh: true))
+                        .BackgroundColor(Colors.Transparent)
+                        .TextColor(AppColors.TextSecondary)
+                        .HCenter()
+                ).Spacing(12).Padding(16, 20)
+            );
+
         if (State.Error is not null)
             return SectionCard(
                 VStack(
@@ -111,7 +156,7 @@ partial class ClaudeDashBoardPage : Component<ClaudeDashBoardPageState>
                         Label(AppStrings.LastRefreshed(State.LastRefreshed))
                             .FontSize(11).VCenter().TextColor(AppColors.TextSecondary),
                         Button("⟳")
-                            .OnClicked(async () => await LoadData())
+                            .OnClicked(async () => await LoadData(forceRefresh: true))
                             .BackgroundColor(Colors.Transparent)
                             .TextColor(AppColors.TextSecondary)
                             .WidthRequest(40).HeightRequest(44)
@@ -125,7 +170,7 @@ partial class ClaudeDashBoardPage : Component<ClaudeDashBoardPageState>
                         .FontSize(12).TextColor(AppColors.TextSecondary).HCenter()
                         .HorizontalTextAlignment(TextAlignment.Center),
                     Button(AppStrings.Retry)
-                        .OnClicked(async () => await LoadData()).HCenter()
+                        .OnClicked(async () => await LoadData(forceRefresh: true)).HCenter()
                 ).Spacing(10).Padding(16, 14)
             );
 

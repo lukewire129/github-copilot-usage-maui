@@ -7,34 +7,71 @@ using copilot_usage_maui.Models;
 
 namespace copilot_usage_maui.Services;
 
+/// <summary>토큰 만료 전용 예외. UI에서 구분하여 재인증 안내 표시.</summary>
+class ClaudeTokenExpiredException : InvalidOperationException
+{
+    public ClaudeTokenExpiredException(string message) : base(message) { }
+}
+
 class ClaudeUsageService
 {
     readonly SettingsService _settings;
     readonly HttpClient _http = new();
 
+    // ─── Cache ────────────────────────────────────────────────────────────────
+    ClaudeUsageSnapshot? _cachedSnapshot;
+    DateTime _cacheTimestamp = DateTime.MinValue;
+    static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(1);
+    readonly SemaphoreSlim _fetchLock = new(1, 1);
+
+    static readonly string CacheFilePath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "copilot-usage-maui", "claude-usage-cache.json");
+
     public ClaudeUsageService(SettingsService settings)
     {
         _settings = settings;
+        LoadCacheFromDisk();
     }
 
     // ─── Public entry point ─────────────────────────────────────────────────
 
-    public async Task<ClaudeUsageSnapshot> GetUsageSnapshotAsync()
+    public async Task<ClaudeUsageSnapshot> GetUsageSnapshotAsync(bool forceRefresh = false)
     {
-        int method = _settings.ClaudeAuthMethod;
+        // 캐시 히트 (lock 없이 빠른 체크)
+        if (!forceRefresh && _cachedSnapshot is not null
+            && (DateTime.UtcNow - _cacheTimestamp) < CacheTtl)
+            return _cachedSnapshot;
 
-        return method switch
+        await _fetchLock.WaitAsync();
+        try
         {
-            1 => await GetUsageViaOAuthAsync(),
-            2 => await GetUsageViaCliAsync(),
-            _ => await GetUsageAutoAsync()
-        };
+            // Double-check after lock
+            if (!forceRefresh && _cachedSnapshot is not null
+                && (DateTime.UtcNow - _cacheTimestamp) < CacheTtl)
+                return _cachedSnapshot;
+
+            int method = _settings.ClaudeAuthMethod;
+            var result = method switch
+            {
+                1 => await GetUsageViaOAuthAsync(),
+                2 => await GetUsageViaCliAsync(),
+                _ => await GetUsageAutoAsync()
+            };
+
+            _cachedSnapshot = result;
+            _cacheTimestamp = DateTime.UtcNow;
+            SaveCacheToDisk(result);
+            return result;
+        }
+        finally { _fetchLock.Release(); }
     }
 
     async Task<ClaudeUsageSnapshot> GetUsageAutoAsync()
     {
         Exception? oauthEx = null;
         try { return await GetUsageViaOAuthAsync(); }
+        catch (ClaudeTokenExpiredException) { throw; } // 만료는 CLI fallback 없이 즉시 전파
         catch (Exception ex) { oauthEx = ex; }
 
         try { return await GetUsageViaCliAsync(); }
@@ -104,9 +141,15 @@ class ClaudeUsageService
 
     async Task<ClaudeUsageSnapshot> GetUsageViaOAuthAsync()
     {
-        var creds = await ReadCredentialsAsync()
-            ?? throw new InvalidOperationException(
-                "Claude OAuth 토큰을 찾을 수 없거나 만료되었습니다. 'claude' 명령으로 재로그인하세요.");
+        var (creds, isExpired) = await ReadCredentialsAsync();
+        if (creds is null)
+        {
+            if (isExpired)
+                throw new ClaudeTokenExpiredException(
+                    "Claude OAuth 토큰이 만료되었습니다.");
+            throw new InvalidOperationException(
+                "Claude OAuth 토큰을 찾을 수 없습니다. 'claude' 명령으로 로그인하세요.");
+        }
 
         // api.anthropic.com은 표준 API — Cloudflare TLS 핑거프린트 검사 없음
         // WebView2 불필요, HttpClient로 직접 호출 가능
@@ -122,20 +165,28 @@ class ClaudeUsageService
         string json = await response.Content.ReadAsStringAsync(cts.Token);
 
         if (!response.IsSuccessStatusCode)
-            throw new HttpRequestException(
-                $"HTTP {(int)response.StatusCode}: {Truncate(json)}");
+        {
+            // 429 + 캐시 있음 → 캐시 반환 (에러 표시 안 함)
+            if ((int)response.StatusCode == 429 && _cachedSnapshot is not null)
+                return _cachedSnapshot;
+
+            string msg = (int)response.StatusCode == 429
+                ? "API 요청 한도 초과 (429). 잠시 후 다시 시도하세요."
+                : $"HTTP {(int)response.StatusCode}: {Truncate(json)}";
+            throw new HttpRequestException(msg);
+        }
 
         var snapshot = ParseOAuthUsageResponse(json);
         return snapshot with { Plan = creds.SubscriptionType ?? creds.RateLimitTier };
     }
 
-    async Task<ClaudeOAuthCredentials?> ReadCredentialsAsync()
+    async Task<(ClaudeOAuthCredentials? Creds, bool IsExpired)> ReadCredentialsAsync()
     {
         string credPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             ".claude", ".credentials.json");
 
-        if (!File.Exists(credPath)) return null;
+        if (!File.Exists(credPath)) return (null, false);
 
         try
         {
@@ -143,14 +194,14 @@ class ClaudeUsageService
             var file = JsonSerializer.Deserialize<ClaudeCredentialsFile>(json);
             var creds = file?.ClaudeAiOauth;
 
-            if (creds is null || string.IsNullOrEmpty(creds.AccessToken)) return null;
-            if (creds.IsExpired) return null;
+            if (creds is null || string.IsNullOrEmpty(creds.AccessToken)) return (null, false);
+            if (creds.IsExpired) return (null, true);
 
-            return creds;
+            return (creds, false);
         }
         catch
         {
-            return null;
+            return (null, false);
         }
     }
 
@@ -290,23 +341,47 @@ class ClaudeUsageService
     static ClaudeUsageSnapshot EmptySnapshot()
         => new(null, null, [], null, null, null, DateTime.UtcNow);
 
+    /// <summary>외부에서 Claude CLI 경로를 확인할 때 사용.</summary>
+    public static string? FindClaudePath() => ResolveClaudePath(null);
+
     static string? ResolveClaudePath(string? customPath)
     {
+        // 1. 사용자 지정 경로
         if (!string.IsNullOrWhiteSpace(customPath) && File.Exists(customPath))
             return customPath;
 
-        var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? "";
-        foreach (var dir in pathEnv.Split(';', StringSplitOptions.RemoveEmptyEntries))
+        // 2. where 명령어로 OS에 위임 (PATH + PATHEXT 전체 검색)
+        try
         {
-            foreach (var ext in new[] { "claude.cmd", "claude.exe" })
+            var psi = new ProcessStartInfo
             {
-                var candidate = Path.Combine(dir.Trim(), ext);
-                if (File.Exists(candidate)) return candidate;
+                FileName = "where",
+                Arguments = "claude",
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+            using var proc = Process.Start(psi);
+            if (proc is not null)
+            {
+                string output = proc.StandardOutput.ReadToEnd();
+                proc.WaitForExit(3000);
+                if (proc.ExitCode == 0)
+                {
+                    string? firstLine = output.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                        .FirstOrDefault()?.Trim();
+                    if (!string.IsNullOrEmpty(firstLine) && File.Exists(firstLine))
+                        return firstLine;
+                }
             }
         }
+        catch { /* where 명령 실패 시 무시 */ }
 
+        // 3. 잘 알려진 경로 (PATH에 등록 안 한 사용자용 폴백)
         var wellKnown = new[]
         {
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".local", "bin", "claude.exe"),
             @"C:\Program Files\nodejs\claude.cmd",
             @"C:\Program Files\nodejs\claude.exe",
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -319,5 +394,36 @@ class ClaudeUsageService
                 "AnthropicClaude", "claude.exe"),
         };
         return wellKnown.FirstOrDefault(File.Exists);
+    }
+
+    // ─── Disk cache ───────────────────────────────────────────────────────────
+
+    void LoadCacheFromDisk()
+    {
+        try
+        {
+            if (!File.Exists(CacheFilePath)) return;
+            string json = File.ReadAllText(CacheFilePath);
+            var snapshot = JsonSerializer.Deserialize<ClaudeUsageSnapshot>(json);
+            if (snapshot is not null)
+            {
+                _cachedSnapshot = snapshot;
+                _cacheTimestamp = File.GetLastWriteTimeUtc(CacheFilePath);
+            }
+        }
+        catch { /* 디스크 캐시 로드 실패 시 무시 */ }
+    }
+
+    void SaveCacheToDisk(ClaudeUsageSnapshot snapshot)
+    {
+        try
+        {
+            string? dir = Path.GetDirectoryName(CacheFilePath);
+            if (dir is not null && !Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
+            string json = JsonSerializer.Serialize(snapshot);
+            File.WriteAllText(CacheFilePath, json);
+        }
+        catch { /* 디스크 캐시 저장 실패 시 무시 */ }
     }
 }

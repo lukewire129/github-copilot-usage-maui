@@ -34,7 +34,17 @@
       "Bash(xargs grep:*)",
       "Bash(powershell.exe -Command \"Set-Location ''C:\\\\Users\\\\dm\\\\source\\\\repos\\\\_personal\\\\copilot-usage-maui''; dotnet build -f net9.0-windows10.0.19041.0 2>&1 | Select-Object -Last 20\")",
       "Bash(grep -r \"Timer\\\\|DisposeAsync\\\\|IAsyncDisposable\" . --include=*.md)",
-      "WebFetch(domain:adospace.gitbook.io)"
+      "WebFetch(domain:adospace.gitbook.io)",
+      "Bash(echo \"$PATH\")",
+      "Read(//c/Program Files/**)",
+      "Read(//c/Program Files \\(x86\\)/**)",
+      "Read(//c/Users/dm/source/repos/_personal/copilot-usage-maui/**)",
+      "Bash(winget list:*)",
+      "Bash(powershell.exe -NoProfile -Command \"Get-Command claude -ErrorAction SilentlyContinue | Select-Object Source\")",
+      "Bash(powershell.exe -NoProfile -Command \"Get-ChildItem -Path ''''$env:LOCALAPPDATA'''' -Recurse -Filter ''''claude.exe'''' -ErrorAction SilentlyContinue | Select-Object FullName\")",
+      "Read(//c/Users/dm/source/repos/_personal/copilot-usage-maui/$USERPROFILE/.local/bin/**)",
+      "Read(//c/Users/dm/source/repos/_personal/copilot-usage-maui/$USERPROFILE/.local/**)",
+      "Bash(git checkout:*)"
     ]
   }
 }

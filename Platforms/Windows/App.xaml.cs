@@ -10,6 +10,7 @@ namespace copilot_usage_maui.WinUI
     {
         WidgetWindow? _widgetWindow;
         MainWindowService? _mainWindowService;
+        SettingsService? _settingsService;
 
         public App()
         {
@@ -36,16 +37,10 @@ namespace copilot_usage_maui.WinUI
                 {
                     var widgetService = IPlatformApplication.Current?.Services.GetService<WidgetService>();
                     _mainWindowService = IPlatformApplication.Current?.Services.GetService<MainWindowService>();
+                    _settingsService   = IPlatformApplication.Current?.Services.GetService<SettingsService>();
 
                     if (widgetService is not null)
-                    {
-                        _widgetWindow = new WidgetWindow(widgetService, _mainWindowService);
-                        _widgetWindow.Show();
-
-                        // 위젯 HWND를 MainWindowService에 알려줌 (포커스 체크용)
-                        if (_mainWindowService is not null)
-                            _mainWindowService.WidgetHwnd = _widgetWindow.Hwnd;
-                    }
+                        CreateAndShowWidget(widgetService);
                 }
                 catch (Exception ex)
                 {
@@ -63,6 +58,29 @@ namespace copilot_usage_maui.WinUI
                 }
                 catch { }
             };
+        }
+
+        void CreateAndShowWidget(WidgetService widgetService)
+        {
+            _widgetWindow?.Close();
+            _widgetWindow = null;
+
+            _widgetWindow = new WidgetWindow(widgetService, _mainWindowService, _settingsService);
+            _widgetWindow.WidgetModeChangeRequested += OnWidgetModeChangeRequested;
+            _widgetWindow.Show();
+
+            if (_mainWindowService is not null)
+                _mainWindowService.WidgetHwnd = _widgetWindow.Hwnd;
+        }
+
+        void OnWidgetModeChangeRequested(int mode)
+        {
+            Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread()?.TryEnqueue(() =>
+            {
+                var widgetService = IPlatformApplication.Current?.Services.GetService<WidgetService>();
+                if (widgetService is not null)
+                    CreateAndShowWidget(widgetService);
+            });
         }
 
         void SetupMainWindow()

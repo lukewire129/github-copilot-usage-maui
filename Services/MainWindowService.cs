@@ -24,6 +24,12 @@ public class MainWindowService
 
     public bool IsVisible => _isVisible;
     public bool IsQuitting => _isQuitting;
+    public bool IsPinned { get; private set; }
+
+    public void TogglePin() => IsPinned = !IsPinned;
+
+    enum PopupDirection { Up, Down }
+    PopupDirection _lastPopupDirection = PopupDirection.Up;
 
     /// <summary>
     /// 위젯 윈도우의 HWND (포커스 체크 시 제외 대상)
@@ -94,7 +100,53 @@ public class MainWindowService
     }
 
     /// <summary>
-    /// 슬라이드 업 애니메이션과 함께 메인 윈도우 표시
+    /// 위젯 rect 기준으로 팝업 위치와 방향을 계산
+    /// </summary>
+    (int targetX, int targetY, PopupDirection direction) ComputePopupPosition()
+    {
+        var displayArea = DisplayArea.GetFromWindowId(_appWindow!.Id, DisplayAreaFallback.Primary);
+        var screen   = displayArea.OuterBounds;
+        var workArea = displayArea.WorkArea;
+        var popupSize = _appWindow.Size;
+        int popupW = popupSize.Width;
+        int popupH = popupSize.Height;
+
+        RECT widgetRect;
+        if (WidgetHwnd != IntPtr.Zero)
+        {
+            GetWindowRect(WidgetHwnd, out widgetRect);
+        }
+        else
+        {
+            // 위젯 없으면 우측 하단 fallback
+            widgetRect.left   = workArea.X + workArea.Width - 280 - 8;
+            widgetRect.right  = widgetRect.left + 280;
+            widgetRect.top    = workArea.Y + workArea.Height - 64;
+            widgetRect.bottom = widgetRect.top + 64;
+        }
+
+        int widgetCenterX = (widgetRect.left + widgetRect.right) / 2;
+        int screenMidY    = screen.Y + screen.Height / 2;
+
+        // 위젯 중심이 화면 상단 절반이면 팝업을 위젯 아래로, 하단 절반이면 위로
+        var dir = ((widgetRect.top + widgetRect.bottom) / 2 < screenMidY)
+            ? PopupDirection.Down
+            : PopupDirection.Up;
+
+        int targetY = dir == PopupDirection.Down
+            ? widgetRect.bottom + 8
+            : widgetRect.top - popupH - 8;
+
+        // X: 위젯 수평 중앙 기준, workArea 범위로 clamp
+        int targetX = widgetCenterX - popupW / 2;
+        targetX = Math.Max(workArea.X + 8, targetX);
+        targetX = Math.Min(workArea.X + workArea.Width - popupW - 8, targetX);
+
+        return (targetX, targetY, dir);
+    }
+
+    /// <summary>
+    /// 슬라이드 애니메이션과 함께 메인 윈도우 표시 (위젯 위치 기준 방향)
     /// </summary>
     public void ShowWithAnimation()
     {
@@ -102,32 +154,29 @@ public class MainWindowService
 
         _isAnimating = true;
 
-        // 시작 표시줄에 다시 표시
         RestoreInTaskbar();
 
-        // Restore if minimized
         if (IsIconic(_hwnd))
             ShowWindow(_hwnd, SW_RESTORE);
 
-        // 작업표시줄 위에 위치
-        PositionAboveTaskbar();
+        var (targetX, targetY, dir) = ComputePopupPosition();
+        _lastPopupDirection = dir;
 
-        var displayArea = DisplayArea.GetFromWindowId(_appWindow.Id, DisplayAreaFallback.Primary);
-        var workArea = displayArea.WorkArea;
-        var windowSize = _appWindow.Size;
+        var popupH = _appWindow.Size.Height;
 
-        int targetX = workArea.X + workArea.Width - windowSize.Width - 10;
-        int targetY = workArea.Y + workArea.Height - windowSize.Height - 10;
-        int startY = workArea.Y + workArea.Height; // 화면 밖(아래)에서 시작
+        // 방향에 따라 시작 위치 결정
+        // Down: 위에서 내려옴 (startY < targetY)
+        // Up:   아래서 올라옴 (startY > targetY)
+        int startY = dir == PopupDirection.Down
+            ? targetY - popupH
+            : targetY + popupH;
 
-        // 시작 위치로 이동 후 표시
         SetWindowPos(_hwnd, IntPtr.Zero, targetX, startY, 0, 0,
             SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 
         _appWindow.Show(true);
         SetForegroundWindow(_hwnd);
 
-        // 슬라이드 업 애니메이션
         const int steps = 12;
         var timer = new MUX.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(12) };
         int step = 0;
@@ -137,7 +186,7 @@ public class MainWindowService
             step++;
             double t = (double)step / steps;
             double ease = 1.0 - Math.Pow(1.0 - t, 3); // EaseOutCubic
-            int currentY = startY - (int)((startY - targetY) * ease);
+            int currentY = startY + (int)((targetY - startY) * ease);
 
             SetWindowPos(_hwnd, IntPtr.Zero, targetX, currentY, 0, 0,
                 SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
@@ -147,8 +196,6 @@ public class MainWindowService
                 timer.Stop();
                 _isVisible = true;
                 _isAnimating = false;
-
-                // 포커스 감시 시작
                 StartFocusWatch();
             }
         };
@@ -156,7 +203,7 @@ public class MainWindowService
     }
 
     /// <summary>
-    /// 슬라이드 다운 애니메이션과 함께 메인 윈도우 숨김
+    /// 슬라이드 애니메이션과 함께 메인 윈도우 숨김 (열릴 때 방향의 반대)
     /// </summary>
     public void HideWithAnimation()
     {
@@ -165,13 +212,18 @@ public class MainWindowService
         _isAnimating = true;
         StopFocusWatch();
 
-        var displayArea = DisplayArea.GetFromWindowId(_appWindow.Id, DisplayAreaFallback.Primary);
-        var workArea = displayArea.WorkArea;
-        var windowSize = _appWindow.Size;
+        // 현재 팝업 위치를 직접 읽어 시작점으로 사용
+        GetWindowRect(_hwnd, out RECT currentRect);
+        int startX = currentRect.left;
+        int startY = currentRect.top;
+        int popupH = _appWindow.Size.Height;
 
-        int startX = workArea.X + workArea.Width - windowSize.Width - 10;
-        int startY = workArea.Y + workArea.Height - windowSize.Height - 10;
-        int targetY = workArea.Y + workArea.Height; // 화면 밖으로
+        // 열릴 때와 반대 방향으로 나감
+        // Down으로 열렸으면 → 위로 사라짐 (targetY < startY)
+        // Up으로 열렸으면  → 아래로 사라짐 (targetY > startY)
+        int targetY = _lastPopupDirection == PopupDirection.Down
+            ? startY - popupH
+            : startY + popupH;
 
         const int steps = 10;
         var timer = new MUX.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(12) };
@@ -209,6 +261,7 @@ public class MainWindowService
         _focusCheckTimer.Tick += (_, _) =>
         {
             if (_isAnimating) return;
+            if (IsPinned) return;
 
             var fg = GetForegroundWindow();
             if (fg != _hwnd && fg != WidgetHwnd && fg != IntPtr.Zero)
@@ -294,7 +347,11 @@ public class MainWindowService
     [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hWnd);
     [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+    [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
     [DllImport("dwmapi.dll", PreserveSig = true)] static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int pvAttribute, int cbAttribute);
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    struct RECT { public int left, top, right, bottom; }
 
     #endregion
 }

@@ -19,6 +19,7 @@ public class WidgetWindow
 {
     readonly WidgetService _widgetService;
     readonly MainWindowService? _mainWindowService;
+    readonly SettingsService? _settingsService;
     MUX.Window? _window;
     AppWindow? _appWindow;
     IntPtr _hwnd;
@@ -44,21 +45,35 @@ public class WidgetWindow
     string? _currentIconFileName;
 
     bool _isDeskbandMode;
+    bool _isFloatingMode;
     bool _isDarkTaskbar;
     MUX.DispatcherTimer? _repositionTimer;
+
+    // WndProc subclassing for drag (floating mode)
+    delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+    WndProcDelegate? _wndProcDelegate; // must be kept alive to prevent GC collection
+    IntPtr _originalWndProc;
 
     // Context menu
     WinControls.MenuFlyout? _contextMenu;
 
-    public WidgetWindow(WidgetService widgetService, MainWindowService? mainWindowService)
+    // Event raised when user requests widget mode switch
+    public event Action<int>? WidgetModeChangeRequested;
+
+    public WidgetWindow(WidgetService widgetService, MainWindowService? mainWindowService, SettingsService? settingsService = null)
     {
         _widgetService = widgetService;
         _mainWindowService = mainWindowService;
+        _settingsService = settingsService;
     }
 
     public void Show()
     {
-        _isDeskbandMode = IsWindows11OrLater();
+        // 모드 결정: 저장된 설정 기반, Win10이면 항상 Floating
+        int savedMode = _settingsService?.WidgetMode ?? 0;
+        bool canDeskband = IsWindows11OrLater();
+        _isFloatingMode = (savedMode == 1) || !canDeskband;
+        _isDeskbandMode = !_isFloatingMode && canDeskband;
         _isDarkTaskbar = IsTaskbarDarkTheme();
 
         _window = new MUX.Window();
@@ -94,7 +109,12 @@ public class WidgetWindow
         _window.Content = _contentRoot;
         _window.Activate();
 
-        if (_isDeskbandMode)
+        if (_isFloatingMode)
+        {
+            PositionAsFloating();
+            InstallWndProc();
+        }
+        else if (_isDeskbandMode)
             AttachToTaskbar();
         else
             PositionAboveTaskbar();
@@ -117,6 +137,8 @@ public class WidgetWindow
         _widgetService.DataChanged -= OnDataChanged;
         _repositionTimer?.Stop();
         _repositionTimer = null;
+        if (_isFloatingMode)
+            UninstallWndProc();
         _window?.Close();
         _window = null;
     }
@@ -231,11 +253,191 @@ public class WidgetWindow
 
     #endregion
 
+    #region Floating Mode
+
+    void PositionAsFloating()
+    {
+        if (_appWindow?.Presenter is OverlappedPresenter presenter)
+        {
+            presenter.IsAlwaysOnTop = true;
+            presenter.IsResizable = false;
+        }
+
+        int widgetWidth  = 280;
+        int widgetHeight = 80;
+
+        int x = _settingsService?.FloatingWidgetX ?? -1;
+        int y = _settingsService?.FloatingWidgetY ?? -1;
+
+        if (x < 0 || y < 0)
+        {
+            // 저장된 위치 없으면 우측 상단 기본값
+            var displayArea = DisplayArea.GetFromWindowId(
+                _appWindow!.Id, DisplayAreaFallback.Primary);
+            var workArea = displayArea.WorkArea;
+            x = workArea.X + workArea.Width - widgetWidth - 12;
+            y = workArea.Y + 12;
+        }
+
+        _appWindow!.MoveAndResize(new RectInt32(x, y, widgetWidth, widgetHeight));
+    }
+
+    void InstallWndProc()
+    {
+        _wndProcDelegate = FloatingWndProc;
+        IntPtr newProc = Marshal.GetFunctionPointerForDelegate(_wndProcDelegate);
+        _originalWndProc = SetWindowLongPtr(_hwnd, GWL_WNDPROC, newProc);
+    }
+
+    void UninstallWndProc()
+    {
+        if (_originalWndProc != IntPtr.Zero)
+        {
+            SetWindowLongPtr(_hwnd, GWL_WNDPROC, _originalWndProc);
+            _originalWndProc = IntPtr.Zero;
+        }
+        _wndProcDelegate = null;
+    }
+
+    IntPtr FloatingWndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
+    {
+        if (msg == WM_NCHITTEST)
+            return (IntPtr)HTCAPTION; // 전체 영역을 타이틀바로 처리 → OS 기본 드래그
+
+        if (msg == WM_EXITSIZEMOVE)
+        {
+            // 드래그 완료 시 위치 저장
+            if (GetWindowRect(_hwnd, out RECT r) && _settingsService is not null)
+            {
+                _settingsService.FloatingWidgetX = r.left;
+                _settingsService.FloatingWidgetY = r.top;
+            }
+        }
+
+        return CallWindowProc(_originalWndProc, hWnd, msg, wParam, lParam);
+    }
+
+    static bool IsSystemDarkTheme()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                @"SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+            var value = key?.GetValue("AppsUseLightTheme");
+            return value is not int lightTheme || lightTheme == 0;
+        }
+        catch { return true; }
+    }
+
+    #endregion
+
     #region UI
 
     MUX.UIElement BuildContent()
     {
-        return BuildDeskbandContent();
+        return _isFloatingMode ? BuildFloatingContent() : BuildDeskbandContent();
+    }
+
+    /// <summary>
+    /// Floating mode: 자유롭게 떠있는 위젯 (80px 높이, 시스템 테마 기반 색상)
+    /// </summary>
+    MUX.UIElement BuildFloatingContent()
+    {
+        bool dark = IsSystemDarkTheme();
+
+        var bgColor = dark
+            ? ColorHelper.FromArgb(220, 28, 28, 28)
+            : ColorHelper.FromArgb(220, 250, 250, 250);
+
+        var textColor = dark
+            ? Microsoft.UI.Colors.White
+            : ColorHelper.FromArgb(255, 30, 30, 30);
+
+        var dimTextColor = dark
+            ? ColorHelper.FromArgb(180, 255, 255, 255)
+            : ColorHelper.FromArgb(180, 30, 30, 30);
+
+        var barTrackBrush = new WinMedia.SolidColorBrush(
+            dark
+                ? ColorHelper.FromArgb(60, 255, 255, 255)
+                : ColorHelper.FromArgb(60, 0, 0, 0));
+
+        var rootGrid = new WinControls.Grid
+        {
+            Background = new WinMedia.SolidColorBrush(bgColor),
+            Padding = new MUX.Thickness(8, 4, 8, 4),
+            HorizontalAlignment = MUX.HorizontalAlignment.Stretch,
+            VerticalAlignment = MUX.VerticalAlignment.Center,
+            ColumnSpacing = 12,
+            CornerRadius = new MUX.CornerRadius(8),
+        };
+        rootGrid.ColumnDefinitions.Add(new WinControls.ColumnDefinition { Width = MUX.GridLength.Auto });
+        rootGrid.ColumnDefinitions.Add(new WinControls.ColumnDefinition { Width = new MUX.GridLength(1, MUX.GridUnitType.Star) });
+
+        // Col 0: Icon + Provider Name
+        _iconImage = new WinControls.Image { Width = 20, Height = 20, HorizontalAlignment = MUX.HorizontalAlignment.Center };
+        _providerText = new WinControls.TextBlock
+        {
+            FontSize = 9,
+            Foreground = new WinMedia.SolidColorBrush(dimTextColor),
+            HorizontalAlignment = MUX.HorizontalAlignment.Center,
+        };
+        var col0 = new WinControls.StackPanel
+        {
+            Orientation = WinControls.Orientation.Vertical,
+            VerticalAlignment = MUX.VerticalAlignment.Center,
+            Spacing = 1,
+            Children = { _iconImage, _providerText },
+        };
+        WinControls.Grid.SetColumn(col0, 0);
+        rootGrid.Children.Add(col0);
+
+        // Col 1: Weekly usage
+        var weeklyLabel = new WinControls.TextBlock
+        {
+            Text = "Weekly",
+            FontSize = 8,
+            Foreground = new WinMedia.SolidColorBrush(dimTextColor),
+        };
+        _progressBar = new WinControls.ProgressBar
+        {
+            Minimum = 0,
+            Maximum = 100,
+            Height = 4,
+            VerticalAlignment = MUX.VerticalAlignment.Center,
+            CornerRadius = new MUX.CornerRadius(2),
+            Background = barTrackBrush,
+        };
+        _percentText = new WinControls.TextBlock
+        {
+            FontSize = 10,
+            FontWeight = Microsoft.UI.Text.FontWeights.Bold,
+            Foreground = new WinMedia.SolidColorBrush(textColor),
+            VerticalAlignment = MUX.VerticalAlignment.Center,
+        };
+        _resetText = new WinControls.TextBlock
+        {
+            FontSize = 8,
+            Foreground = new WinMedia.SolidColorBrush(dimTextColor),
+            VerticalAlignment = MUX.VerticalAlignment.Center,
+        };
+        var barRow = new WinControls.StackPanel
+        {
+            Orientation = WinControls.Orientation.Horizontal,
+            Spacing = 3,
+            Children = { _progressBar, _percentText, _resetText },
+        };
+        var col1 = new WinControls.StackPanel
+        {
+            Orientation = WinControls.Orientation.Vertical,
+            VerticalAlignment = MUX.VerticalAlignment.Center,
+            Spacing = 1,
+            Children = { weeklyLabel, barRow },
+        };
+        WinControls.Grid.SetColumn(col1, 1);
+        rootGrid.Children.Add(col1);
+
+        return rootGrid;
     }
 
     /// <summary>
@@ -440,6 +642,36 @@ public class WidgetWindow
 
         _contextMenu.Items.Add(new WinControls.MenuFlyoutSeparator());
 
+        // ── Widget Mode submenu ──
+        var widgetModeSubMenu = new WinControls.MenuFlyoutSubItem
+        {
+            Text = "Widget Mode",
+            Icon = new WinControls.FontIcon { Glyph = "\uE78B" },
+        };
+
+        if (IsWindows11OrLater())
+        {
+            var deskbandToggle = new WinControls.ToggleMenuFlyoutItem
+            {
+                Text = "DeskBand",
+                IsChecked = _isDeskbandMode,
+            };
+            deskbandToggle.Click += (_, _) => RequestModeSwitch(0);
+            widgetModeSubMenu.Items.Add(deskbandToggle);
+        }
+
+        var floatingToggle = new WinControls.ToggleMenuFlyoutItem
+        {
+            Text = "Floating Widget",
+            IsChecked = _isFloatingMode,
+        };
+        floatingToggle.Click += (_, _) => RequestModeSwitch(1);
+        widgetModeSubMenu.Items.Add(floatingToggle);
+
+        _contextMenu.Items.Add(widgetModeSubMenu);
+
+        _contextMenu.Items.Add(new WinControls.MenuFlyoutSeparator());
+
         // ── Quit ──
         var quitItem = new WinControls.MenuFlyoutItem
         {
@@ -453,6 +685,13 @@ public class WidgetWindow
             Microsoft.Maui.Controls.Application.Current?.Quit();
         };
         _contextMenu.Items.Add(quitItem);
+    }
+
+    void RequestModeSwitch(int mode)
+    {
+        if (_settingsService is not null)
+            _settingsService.WidgetMode = mode;
+        WidgetModeChangeRequested?.Invoke(mode);
     }
 
     void SwitchProvider(string url)
@@ -664,15 +903,21 @@ public class WidgetWindow
 
     const int GWL_EXSTYLE = -20;
     const int GWL_STYLE = -16;
+    const int GWL_WNDPROC = -4;
     const int WS_EX_TOOLWINDOW = 0x00000080;
     const int WS_POPUP = unchecked((int)0x80000000);
     const int WS_CHILD = 0x40000000;
     const uint SWP_NOZORDER = 0x0004;
     const uint SWP_NOACTIVATE = 0x0010;
     const uint SWP_FRAMECHANGED = 0x0020;
+    const uint WM_NCHITTEST    = 0x0084;
+    const uint WM_EXITSIZEMOVE = 0x0232;
+    const int  HTCAPTION       = 2;
 
     [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr hWnd, int nIndex);
     [DllImport("user32.dll")] static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+    [DllImport("user32.dll")] static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+    [DllImport("user32.dll")] static extern IntPtr CallWindowProc(IntPtr lpPrevWndFunc, IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr FindWindow(string? lpClassName, string? lpWindowName);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr FindWindowEx(IntPtr hWndParent, IntPtr hWndChildAfter, string? lpszClass, string? lpszWindow);
     [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);

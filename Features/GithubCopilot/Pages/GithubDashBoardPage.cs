@@ -169,6 +169,9 @@ partial class GithubDashBoardPage : Component<GithubDashBoardPageState>
                 UsedPercent = summary.PercentConsumed,
                 ResetTimeText = AppStrings.StatusBarDaysLeft(summary.DaysRemaining)
             });
+
+            // 팝업 데이터 업데이트
+            _widgetService.UpdateCopilotPopup(summary);
         }
         catch (Exception ex)
         {

@@ -10,4 +10,8 @@ public class WidgetData
     // Claude 5-hour session window (null for non-Claude providers)
     public double? SessionUsedPercent { get; set; }
     public string? SessionResetText { get; set; }
+
+    // Claude 7-day weekly window (null for non-Claude providers)
+    public double? WeeklyUsedPercent { get; set; }
+    public string? WeeklyResetText { get; set; }
 }

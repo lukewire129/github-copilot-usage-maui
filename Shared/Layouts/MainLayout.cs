@@ -1,4 +1,5 @@
 using copilot_usage_maui.Features.GithubCopilot.Components;
+using copilot_usage_maui.Services;
 using MauiReactor.Parameters;
 using ReactorRouter.Components;
 using ReactorRouter.Navigation;
@@ -20,19 +21,40 @@ public class MainLayoutState
         new ProviderState { Name = "Copilot", IsSelected = false, Icon = "providericon_copilot.svg", Url="/ai/githubcopilot" },
         new ProviderState { Name = "Claude", IsSelected = false, Icon = "providericon_claude.svg", Url="/ai/claude" }
     };
+    public bool IsPinned { get; set; }
 }
 
 partial class MainLayout : Component
 {
     [Param] IParameter<MainLayoutState> _providersParam;
+
+#if WINDOWS
+    [Inject] MainWindowService _mainWindowService;
+#endif
+
     public override VisualNode Render()
     {
+        var isPinned = _providersParam.Value.IsPinned;
+
         return ContentView(
                 Grid(
-                    HStack(_providersParam.Value.Providers.Select(provider => ProviderItem(provider)))
-                        .Padding(10)
-                        .Height(100)
-                        .Spacing(10),
+                    Grid(
+                        HStack(_providersParam.Value.Providers.Select(provider => ProviderItem(provider)))
+                            .Padding(10)
+                            .Spacing(10),
+
+                        Button(isPinned ? "📌" : "📍")
+                            .OnClicked(TogglePin)
+                            .BackgroundColor(Colors.Transparent)
+                            .TextColor(isPinned ? AppColors.Accent : AppColors.TextSecondary)
+                            .WidthRequest(44)
+                            .HeightRequest(44)
+                            .GridColumn(1)
+                            .VCenter()
+                            .Margin(0, 0, 10, 0)
+                    )
+                    .Columns("*, Auto")
+                    .Height(100),
 
                     Divider()
                         .Margin(10, 10, 10, 20)
@@ -56,6 +78,14 @@ partial class MainLayout : Component
             .Rows("auto, auto, *, auto, auto")
         );
 
+    }
+
+    void TogglePin()
+    {
+#if WINDOWS
+        _mainWindowService.TogglePin();
+#endif
+        _providersParam.Set(s => s.IsPinned = !s.IsPinned);
     }
 
     public bool IsLightTheme => MauiControls.Application.Current?.RequestedTheme == AppTheme.Light;

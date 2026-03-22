@@ -9,7 +9,9 @@ namespace copilot_usage_maui.WinUI
     public partial class App : MauiWinUIApplication
     {
         WidgetWindow? _widgetWindow;
+        PopupWindow? _popupWindow;
         MainWindowService? _mainWindowService;
+        SettingsService? _settingsService;
 
         public App()
         {
@@ -36,16 +38,10 @@ namespace copilot_usage_maui.WinUI
                 {
                     var widgetService = IPlatformApplication.Current?.Services.GetService<WidgetService>();
                     _mainWindowService = IPlatformApplication.Current?.Services.GetService<MainWindowService>();
+                    _settingsService   = IPlatformApplication.Current?.Services.GetService<SettingsService>();
 
                     if (widgetService is not null)
-                    {
-                        _widgetWindow = new WidgetWindow(widgetService, _mainWindowService);
-                        _widgetWindow.Show();
-
-                        // 위젯 HWND를 MainWindowService에 알려줌 (포커스 체크용)
-                        if (_mainWindowService is not null)
-                            _mainWindowService.WidgetHwnd = _widgetWindow.Hwnd;
-                    }
+                        CreateAndShowWidget(widgetService);
                 }
                 catch (Exception ex)
                 {
@@ -63,6 +59,37 @@ namespace copilot_usage_maui.WinUI
                 }
                 catch { }
             };
+        }
+
+        void CreateAndShowWidget(WidgetService widgetService)
+        {
+            _widgetWindow?.Close();
+            _widgetWindow = null;
+
+            // PopupWindow 생성
+            _popupWindow = new PopupWindow(widgetService, _settingsService);
+            _popupWindow.Initialize();
+
+            _widgetWindow = new WidgetWindow(widgetService, _mainWindowService, _settingsService);
+            _widgetWindow.SetPopupWindow(_popupWindow);
+            _widgetWindow.WidgetModeChangeRequested += OnWidgetModeChangeRequested;
+            _widgetWindow.Show();
+
+            // PopupWindow에 위젯 HWND 전달 (포커스 체크용)
+            _popupWindow.WidgetHwnd = _widgetWindow.Hwnd;
+
+            if (_mainWindowService is not null)
+                _mainWindowService.WidgetHwnd = _widgetWindow.Hwnd;
+        }
+
+        void OnWidgetModeChangeRequested(int mode)
+        {
+            Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread()?.TryEnqueue(() =>
+            {
+                var widgetService = IPlatformApplication.Current?.Services.GetService<WidgetService>();
+                if (widgetService is not null)
+                    CreateAndShowWidget(widgetService);
+            });
         }
 
         void SetupMainWindow()

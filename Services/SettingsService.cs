@@ -2,7 +2,7 @@ using Microsoft.Maui.Storage;
 
 namespace copilot_usage_maui.Services;
 
-class SettingsService
+public class SettingsService
 {
     const string KeyMonthsHistory = "months_history";
     const string KeyThemePreference = "theme_preference";
@@ -81,4 +81,27 @@ class SettingsService
         3 => (int)TimeSpan.FromHours(1).TotalMilliseconds,
         _ => 0
     };
+
+    const string KeyWidgetMode      = "widget_mode";
+    const string KeyFloatingWidgetX = "floating_widget_x";
+    const string KeyFloatingWidgetY = "floating_widget_y";
+
+    // 0 = DeskBand (Win11+), 1 = Floating
+    public int WidgetMode
+    {
+        get => Preferences.Default.Get(KeyWidgetMode, 0);
+        set => Preferences.Default.Set(KeyWidgetMode, value);
+    }
+
+    public int FloatingWidgetX
+    {
+        get => Preferences.Default.Get(KeyFloatingWidgetX, -1);
+        set => Preferences.Default.Set(KeyFloatingWidgetX, value);
+    }
+
+    public int FloatingWidgetY
+    {
+        get => Preferences.Default.Get(KeyFloatingWidgetY, -1);
+        set => Preferences.Default.Set(KeyFloatingWidgetY, value);
+    }
 }

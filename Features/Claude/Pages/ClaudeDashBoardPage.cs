@@ -88,6 +88,12 @@ partial class ClaudeDashBoardPage : Component<ClaudeDashBoardPageState>
                 if (session?.TimeUntilReset is { } str && str > TimeSpan.Zero)
                     sessionResetText = AppStrings.ClaudeResetIn(str);
 
+                // 7일 주간 윈도우 정보
+                var weekly = snapshot.WeeklyWindow;
+                string? weeklyResetText = null;
+                if (weekly?.TimeUntilReset is { } wtr && wtr > TimeSpan.Zero)
+                    weeklyResetText = AppStrings.ClaudeResetIn(wtr);
+
                 _widgetService.Update(new WidgetData
                 {
                     ProviderName = "Claude",
@@ -95,8 +101,13 @@ partial class ClaudeDashBoardPage : Component<ClaudeDashBoardPageState>
                     UsedPercent = mostRestrictive.UsedPercent,
                     ResetTimeText = resetLabel,
                     SessionUsedPercent = session?.UsedPercent,
-                    SessionResetText = sessionResetText
+                    SessionResetText = sessionResetText,
+                    WeeklyUsedPercent = weekly?.UsedPercent,
+                    WeeklyResetText = weeklyResetText
                 });
+
+                // 팝업 데이터 업데이트
+                _widgetService.UpdateClaudePopup(snapshot);
             }
         }
         catch (ClaudeTokenExpiredException ex)

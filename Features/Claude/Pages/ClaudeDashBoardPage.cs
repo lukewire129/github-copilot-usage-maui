@@ -1,8 +1,11 @@
+using copilot_usage_maui.Features.GithubCopilot.Components;
+using copilot_usage_maui.Helpers;
 using copilot_usage_maui.Models;
 using copilot_usage_maui.Services;
 using copilot_usage_maui.Shared.Layouts;
 using MauiReactor.Parameters;
-using Microsoft.Maui.Controls;
+using SkiaSharp;
+using SkiaSharp.Views.Maui;
 
 namespace copilot_usage_maui.Features.Claude.Pages;
 
@@ -24,6 +27,8 @@ partial class ClaudeDashBoardPage : Component<ClaudeDashBoardPageState>
     [Inject] WidgetService _widgetService;
 
     [Param] IParameter<MainLayoutState> _providerStateParam;
+
+    bool IsDark => MauiControls.Application.Current?.RequestedTheme == AppTheme.Dark;
 
     protected override async void OnMounted()
     {
@@ -75,20 +80,17 @@ partial class ClaudeDashBoardPage : Component<ClaudeDashBoardPageState>
             });
             _notificationService.CheckAndNotify(snapshot);
 
-            // 위젯 업데이트
             var mostRestrictive = snapshot.MostRestrictive;
             if (mostRestrictive is not null)
             {
                 var resetLabel = mostRestrictive.TimeUntilReset is { } tr && tr > TimeSpan.Zero
                     ? AppStrings.ClaudeResetIn(tr) : "";
 
-                // 5시간 세션 윈도우 정보
                 var session = snapshot.SessionWindow;
                 string? sessionResetText = null;
                 if (session?.TimeUntilReset is { } str && str > TimeSpan.Zero)
                     sessionResetText = AppStrings.ClaudeResetIn(str);
 
-                // 7일 주간 윈도우 정보
                 var weekly = snapshot.WeeklyWindow;
                 string? weeklyResetText = null;
                 if (weekly?.TimeUntilReset is { } wtr && wtr > TimeSpan.Zero)
@@ -105,9 +107,6 @@ partial class ClaudeDashBoardPage : Component<ClaudeDashBoardPageState>
                     WeeklyUsedPercent = weekly?.UsedPercent,
                     WeeklyResetText = weeklyResetText
                 });
-
-                // 팝업 데이터 업데이트
-                _widgetService.UpdateClaudePopup(snapshot);
             }
         }
         catch (ClaudeTokenExpiredException ex)
@@ -140,32 +139,22 @@ partial class ClaudeDashBoardPage : Component<ClaudeDashBoardPageState>
     }
 
     public override VisualNode Render()
-        => ScrollView(
-            Grid("auto,*", "*",
-                // Header
-                Grid("Auto", "*, Auto",
-                    VStack(
-                        Label("Claude")
-                            .FontSize(20)
-                            .FontAttributes(MauiControls.FontAttributes.Bold),
-                        Label(DateTime.Today.ToString(AppStrings.DateFormat))
-                            .FontSize(12)
-                            .TextColor(AppColors.TextSecondary)
-                    ).Spacing(2),
-                    Timer()
-                        .IsEnabled(!State.IsLoading
-                                && State.AutoRefreshIntervalMs > 0)
-                        .Interval(10_000)
-                        .OnTick(() =>
-                        {
-                            if (DateTime.Now - State.LastRefreshed >= TimeSpan.FromMilliseconds(State.AutoRefreshIntervalMs))
-                                _ = LoadData();
-                        })
-                ),
-                Grid(RenderBody()).GridRow(1)
+        => Grid(
+            Timer()
+                .IsEnabled(!State.IsLoading && State.AutoRefreshIntervalMs > 0)
+                .Interval(10_000)
+                .OnTick(() =>
+                {
+                    if (DateTime.Now - State.LastRefreshed >= TimeSpan.FromMilliseconds(State.AutoRefreshIntervalMs))
+                        _ = LoadData();
+                }),
+            ScrollView(
+                VStack(
+                    RenderBody()
+                )
+                .Padding(12, 8)
+                .Spacing(8)
             )
-            .RowSpacing(20)
-            .Padding(24, 20)
         );
 
     VisualNode RenderBody()
@@ -174,249 +163,267 @@ partial class ClaudeDashBoardPage : Component<ClaudeDashBoardPageState>
             return ActivityIndicator().IsRunning(true).Center();
 
         if (State.IsTokenExpired)
-            return SectionCard(
+            return PopupCard(
                 VStack(
                     Label(AppStrings.ClaudeTokenExpired)
-                        .FontSize(15).FontAttributes(MauiControls.FontAttributes.Bold)
+                        .FontSize(14).FontAttributes(MauiControls.FontAttributes.Bold)
                         .TextColor(AppColors.StatusWarning).HCenter()
                         .HorizontalTextAlignment(TextAlignment.Center),
                     Label(AppStrings.ClaudeTokenExpiredDesc)
-                        .FontSize(12).TextColor(AppColors.TextSecondary).HCenter()
+                        .FontSize(11).TextColor(AppColors.PopupText3).HCenter()
                         .HorizontalTextAlignment(TextAlignment.Center),
                     Button(AppStrings.ClaudeReauthCli)
-                            .OnClicked(OnReauthViaCli)
-                            .HCenter(),
+                        .OnClicked(OnReauthViaCli).HCenter(),
                     Button(AppStrings.Retry)
                         .OnClicked(async () => await LoadData(forceRefresh: true))
                         .BackgroundColor(Colors.Transparent)
-                        .TextColor(AppColors.TextSecondary)
-                        .HCenter()
-                ).Spacing(12).Padding(16, 20)
+                        .TextColor(AppColors.PopupText3).HCenter()
+                ).Spacing(10).Padding(12, 16)
             );
 
         if (State.Error is not null)
-            return SectionCard(
+            return PopupCard(
                 VStack(
-                    HStack(
-                        Label(AppStrings.LastRefreshed(State.LastRefreshed))
-                            .FontSize(11).VCenter().TextColor(AppColors.TextSecondary),
-                        Button("⟳")
-                            .OnClicked(async () => await LoadData(forceRefresh: true))
-                            .BackgroundColor(Colors.Transparent)
-                            .TextColor(AppColors.TextSecondary)
-                            .WidthRequest(40).HeightRequest(44)
-                    ).HEnd(),
                     Label(AppStrings.LoadFailed)
-                        .FontSize(15).FontAttributes(MauiControls.FontAttributes.Bold).HCenter(),
+                        .FontSize(14).FontAttributes(MauiControls.FontAttributes.Bold)
+                        .TextColor(AppColors.PopupText1).HCenter(),
                     Label(State.Error)
-                        .TextColor(AppColors.StatusError)
-                        .HCenter().HorizontalTextAlignment(TextAlignment.Center).FontSize(13),
+                        .TextColor(AppColors.StatusError).HCenter()
+                        .HorizontalTextAlignment(TextAlignment.Center).FontSize(12),
                     Label(AppStrings.ClaudeAuthHint)
-                        .FontSize(12).TextColor(AppColors.TextSecondary).HCenter()
+                        .FontSize(11).TextColor(AppColors.PopupText3).HCenter()
                         .HorizontalTextAlignment(TextAlignment.Center),
                     Button(AppStrings.Retry)
                         .OnClicked(async () => await LoadData(forceRefresh: true)).HCenter()
-                ).Spacing(10).Padding(16, 14)
+                ).Spacing(8).Padding(12, 10)
             );
 
         var snap = State.Snapshot!;
-        return VStack(
-            HStack(
-                Label(AppStrings.LastRefreshed(State.LastRefreshed))
-                    .FontSize(11).VCenter().TextColor(AppColors.TextSecondary),
-                Button("⟳")
-                    .OnClicked(async () => await LoadData())
-                    .BackgroundColor(Colors.Transparent)
-                    .TextColor(AppColors.TextSecondary)
-                    .WidthRequest(40).HeightRequest(44)
-            ).HEnd(),
-
-            // 세션 사용량 카드
-            snap.SessionWindow is not null
-                ? SectionCard(RenderRateWindowCard(AppStrings.ClaudeSessionUsage, snap.SessionWindow))
-                : Label(),
-
-            // 주간 사용량 카드
-            snap.WeeklyWindow is not null
-                ? SectionCard(RenderRateWindowCard(AppStrings.ClaudeWeeklyUsage, snap.WeeklyWindow))
-                : Label(),
-
-            // 컨디션 관리 카드
-            snap.MostRestrictive is not null
-                ? SectionCard(RenderConditionCard(snap))
-                : Label(),
-
-            // 모델별 제한 카드
-            snap.ModelWindows.Count > 0
-                ? SectionCard(RenderModelWindows(snap.ModelWindows))
-                : Label(),
-
-            // 계정 정보 카드
-            (snap.Email is not null || snap.Plan is not null)
-                ? SectionCard(RenderAccountInfo(snap))
-                : Label()
-        )
-        .Spacing(16)
-        .Opacity(State.IsLoading ? 0.5 : 1.0);
-    }
-
-    // ─── Rate Window Card ────────────────────────────────────────────────────
-
-    static VisualNode RenderRateWindowCard(string title, ClaudeRateWindow window)
-    {
-        var barColor = window.UsedPercent >= 90 ? AppColors.StatusError
-            : window.UsedPercent >= 70 ? AppColors.StatusWarning
-            : AppColors.StatusSuccess;
-
-        var resetLabel = window.TimeUntilReset is { } tr && tr > TimeSpan.Zero
-            ? AppStrings.ClaudeResetIn(tr)
-            : "";
+        var mostRestrictive = snap.MostRestrictive;
 
         return VStack(
-            Label(title).FontSize(11).TextColor(AppColors.TextSecondary),
-            Label($"{window.UsedPercent:F1}%")
-                .FontSize(28)
-                .FontAttributes(MauiControls.FontAttributes.Bold)
-                .TextColor(barColor),
-            ProgressBar()
-                .Progress(Math.Min(1.0, window.UsedPercent / 100.0))
-                .ProgressColor(barColor)
-                .HeightRequest(8),
-            resetLabel.Length > 0
-                ? Label(resetLabel)
-                    .FontSize(12)
-                    .TextColor(AppColors.TextSecondary)
-                : Label()
-        ).Spacing(8).Padding(16, 14);
+            // 상태 배너
+            mostRestrictive is not null ? RenderStatusBanner(mostRestrictive) : null,
+
+            // Plan 카드
+            RenderPlanCard(snap),
+
+            // Session + Weekly 도넛 그리드
+            snap.SessionWindow is not null || snap.WeeklyWindow is not null
+                ? RenderDonutGrid(snap)
+                : null,
+
+            // 사용 상세 카드
+            mostRestrictive is not null ? RenderDetailsCard(snap, mostRestrictive) : null
+        ).Spacing(8).Opacity(State.IsLoading ? 0.5 : 1.0);
     }
 
-    // ─── Condition Card ──────────────────────────────────────────────────────
-
-    static VisualNode RenderConditionCard(ClaudeUsageSnapshot snap)
+    VisualNode RenderStatusBanner(ClaudeRateWindow w)
     {
-        var w = snap.MostRestrictive!;
         double projected = w.ProjectedFinalPercent;
-        double elapsed = w.ElapsedRatio * 100.0;
+        double pct = Math.Max(w.UsedPercent, projected >= 100 ? 80 : w.UsedPercent);
+        var bgColor = AppColors.StatusBgForPercent(pct);
+        var dotColor = AppColors.StatusColorForPercent(pct);
+        var textColor = AppColors.StatusTextForPercent(pct);
 
-        // 판정
-        bool isImmediateDanger = w.UsedPercent >= 90;
-        bool isDanger = isImmediateDanger || projected >= 100;
-        bool isWarn = !isDanger && projected >= 80;
-
-        Color statusColor = isDanger ? AppColors.StatusError
-            : isWarn ? AppColors.StatusWarning
-            : AppColors.StatusSuccess;
-
-        string statusLabel = isDanger ? AppStrings.ClaudeUsageDanger
-            : isWarn ? AppStrings.ClaudeUsageWarn
-            : AppStrings.ClaudeUsageOk;
-
-        string paceLabel = w.UsedPercent > elapsed + 5 ? AppStrings.ClaudePaceFast
-            : AppStrings.ClaudePaceNormal;
-
-        string projectedText = AppStrings.ClaudeProjectedFinal(Math.Min(projected, 200));
-
-        var resetLabel = w.TimeUntilReset is { } tr && tr > TimeSpan.Zero
-            ? AppStrings.ClaudeResetIn(tr)
-            : "";
-
-        return VStack(
-            Label(AppStrings.ClaudeCondition)
-                .FontSize(11).TextColor(AppColors.TextSecondary),
-            Label(statusLabel)
-                .FontSize(15)
-                .FontAttributes(MauiControls.FontAttributes.Bold)
-                .TextColor(statusColor),
-
-            Grid("Auto,Auto,Auto", "*,*",
-                Label(AppStrings.ClaudeElapsed)
-                    .FontSize(12).TextColor(AppColors.TextSecondary),
-                Label($"{elapsed:F0}%")
-                    .FontSize(13).FontAttributes(MauiControls.FontAttributes.Bold)
-                    .HEnd().GridColumn(1),
-
-                Label(AppStrings.ClaudePaceLabel)
-                    .FontSize(12).TextColor(AppColors.TextSecondary).GridRow(1),
-                Label(paceLabel)
-                    .FontSize(13).FontAttributes(MauiControls.FontAttributes.Bold)
-                    .TextColor(w.UsedPercent > elapsed + 5 ? AppColors.StatusWarning : AppColors.StatusSuccess)
-                    .HEnd().GridColumn(1).GridRow(1),
-
-                Label(AppStrings.ClaudeResetCountdown)
-                    .FontSize(12).TextColor(AppColors.TextSecondary).GridRow(2),
-                Label(resetLabel.Length > 0 ? resetLabel : "-")
-                    .FontSize(13).FontAttributes(MauiControls.FontAttributes.Bold)
-                    .HEnd().GridColumn(1).GridRow(2)
-            ).RowSpacing(10),
-
-            Label(projectedText)
-                .FontSize(12)
-                .TextColor(statusColor)
-        ).Spacing(10).Padding(16, 14);
-    }
-
-    // ─── Model Windows Card ──────────────────────────────────────────────────
-
-    static VisualNode RenderModelWindows(Dictionary<string, ClaudeRateWindow> models)
-    {
-        var rows = new List<VisualNode>
+        string title, sub;
+        if (w.UsedPercent >= 90 || projected >= 100)
         {
-            Label(AppStrings.ClaudeModelLimits)
-                .FontSize(11).TextColor(AppColors.TextSecondary)
-        };
-
-        foreach (var kv in models.OrderByDescending(x => x.Value.UsedPercent))
+            title = AppStrings.IsKoreanStatic
+                ? $"예상 사용량 ~{projected:F0}%"
+                : $"Projected ~{projected:F0}%";
+            sub = AppStrings.IsKoreanStatic
+                ? "사용 속도를 줄이는 것을 권장합니다"
+                : "Consider slowing down usage";
+        }
+        else if (projected >= 80)
         {
-            var barColor = kv.Value.UsedPercent >= 90 ? AppColors.StatusError
-                : kv.Value.UsedPercent >= 70 ? AppColors.StatusWarning
-                : AppColors.StatusSuccess;
-
-            rows.Add(
-                VStack(
-                    Grid("Auto", "*, Auto",
-                        Label(kv.Key).FontSize(13).TextColor(AppColors.TextModelName).VCenter(),
-                        Label($"{kv.Value.UsedPercent:F1}%")
-                            .FontSize(14).FontAttributes(MauiControls.FontAttributes.Bold)
-                            .TextColor(barColor).HEnd().GridColumn(1)
-                    ),
-                    ProgressBar()
-                        .Progress(Math.Min(1.0, kv.Value.UsedPercent / 100.0))
-                        .ProgressColor(barColor)
-                        .HeightRequest(4)
-                ).Spacing(4)
-            );
+            title = AppStrings.IsKoreanStatic
+                ? $"주의 · 예상 {projected:F0}%"
+                : $"Caution · ~{projected:F0}% projected";
+            sub = w.TimeUntilReset is { } tr && tr > TimeSpan.Zero
+                ? AppStrings.ClaudeResetIn(tr)
+                : "";
+        }
+        else
+        {
+            title = AppStrings.IsKoreanStatic
+                ? "여유롭게 사용 가능"
+                : "Usage is on track";
+            sub = w.TimeUntilReset is { } tr && tr > TimeSpan.Zero
+                ? AppStrings.ClaudeResetIn(tr)
+                : "";
         }
 
-        return VStack([.. rows]).Spacing(12).Padding(16, 14);
+        return Border(
+            HStack(
+                BoxView().WidthRequest(7).HeightRequest(7).CornerRadius(4).Color(dotColor).VStart().Margin(0, 3, 0, 0),
+                VStack(
+                    Label(title).FontSize(12).FontAttributes(MauiControls.FontAttributes.Bold).TextColor(textColor),
+                    sub.Length > 0 ? Label(sub).FontSize(10).TextColor(textColor) : null
+                ).Spacing(1)
+            ).Spacing(9).Padding(12, 9)
+        )
+        .BackgroundColor(bgColor)
+        .Stroke(dotColor)
+        .StrokeThickness(1)
+        .StrokeCornerRadius(8);
     }
 
-    // ─── Account Info Card ───────────────────────────────────────────────────
+    VisualNode RenderPlanCard(ClaudeUsageSnapshot snap)
+    {
+        var planText = snap.Plan ?? "Pro";
+        var badgeBg = IsDark ? Color.FromArgb("#085041") : Color.FromArgb("#E1F5EE");
+        var badgeFg = IsDark ? Color.FromArgb("#5DCAA5") : Color.FromArgb("#085041");
 
-    static VisualNode RenderAccountInfo(ClaudeUsageSnapshot snap)
-        => VStack(
-            Label(AppStrings.ClaudeAccountInfo)
-                .FontSize(11).TextColor(AppColors.TextSecondary),
-            Grid("Auto,Auto", "*,*",
-                Label(AppStrings.ClaudeEmail)
-                    .FontSize(12).TextColor(AppColors.TextSecondary),
-                Label(snap.Email ?? "-")
-                    .FontSize(13).FontAttributes(MauiControls.FontAttributes.Bold)
-                    .HEnd().GridColumn(1),
+        return PopupCard(
+            VStack(
+                Grid(
+                    Label("Plan").FontSize(11).TextColor(AppColors.PopupText3).VCenter(),
+                    Badge(planText, badgeBg, badgeFg).GridColumn(1)
+                ).Columns("*, Auto"),
+                Grid(
+                    Label("Claude Code").FontSize(13).FontAttributes(MauiControls.FontAttributes.Bold).TextColor(AppColors.PopupText1).VCenter(),
+                    Label("Anthropic").FontSize(10).TextColor(AppColors.PopupText3).VCenter().GridColumn(1)
+                ).Columns("*, Auto")
+            ).Spacing(4).Padding(11, 13)
+        );
+    }
 
-                Label(AppStrings.ClaudePlan)
-                    .FontSize(12).TextColor(AppColors.TextSecondary).GridRow(1),
-                Label(snap.Plan ?? "-")
-                    .FontSize(13).FontAttributes(MauiControls.FontAttributes.Bold)
-                    .TextColor(AppColors.Accent).HEnd().GridColumn(1).GridRow(1)
-            ).RowSpacing(10)
-        ).Spacing(10).Padding(16, 14);
+    VisualNode RenderDonutGrid(ClaudeUsageSnapshot snap)
+    {
+        return Grid(
+            snap.SessionWindow is not null
+                ? DonutMiniCard(
+                    AppStrings.IsKoreanStatic ? "Session (5h)" : "Session (5h)",
+                    snap.SessionWindow,
+                    snap.SessionWindow.TimeUntilReset is { } str && str > TimeSpan.Zero
+                        ? (str.TotalHours < 1
+                            ? (AppStrings.IsKoreanStatic ? "곧 리셋" : "Resets soon")
+                            : AppStrings.ClaudeResetIn(str))
+                        : "")
+                : null,
+            snap.WeeklyWindow is not null
+                ? DonutMiniCard(
+                    AppStrings.IsKoreanStatic ? "Weekly (7d)" : "Weekly (7d)",
+                    snap.WeeklyWindow,
+                    snap.WeeklyWindow.TimeUntilReset is { } wtr && wtr > TimeSpan.Zero
+                        ? AppStrings.ClaudeResetIn(wtr)
+                        : "")
+                    .GridColumn(1)
+                : null
+        )
+        .Columns("*, *")
+        .ColumnSpacing(7);
+    }
 
-    // ─── Helpers ─────────────────────────────────────────────────────────────
+    Border DonutMiniCard(string title, ClaudeRateWindow window, string resetText)
+    {
+        var pct = window.UsedPercent;
+        var fillColor = AppColors.StatusColorForPercent(pct);
 
-    static VisualNode SectionCard(VisualNode content)
+        return Border(
+            VStack(
+                Label(title).FontSize(10).TextColor(AppColors.PopupText3),
+                HStack(
+                    new SkiaCanvas()
+                        .WidthRequest(28).HeightRequest(28)
+                        .OnPaintSurface((sender, e) =>
+                        {
+                            DonutRenderer.DrawOnCanvas(
+                                e.Surface.Canvas,
+                                e.Info.Width, e.Info.Height,
+                                strokeWidth: 3.5f * (e.Info.Width / 28f),
+                                percent: pct,
+                                trackColor: DonutRenderer.GetTrackColor(IsDark),
+                                fillColor: DonutRenderer.GetStatusColor(pct, IsDark));
+                        }),
+                    Label($"{pct:F0}%")
+                        .FontSize(20).FontAttributes(MauiControls.FontAttributes.Bold)
+                        .TextColor(fillColor).VCenter()
+                ).Spacing(6),
+                resetText.Length > 0
+                    ? Label(resetText).FontSize(10).TextColor(AppColors.PopupText3)
+                    : null
+            ).Spacing(5).Padding(9, 11)
+        )
+        .BackgroundColor(AppColors.PopupSurface)
+        .Stroke(Colors.Transparent)
+        .StrokeCornerRadius(9);
+    }
+
+    VisualNode RenderDetailsCard(ClaudeUsageSnapshot snap, ClaudeRateWindow w)
+    {
+        double elapsed = w.ElapsedRatio * 100.0;
+        double projected = w.ProjectedFinalPercent;
+        bool isFast = w.UsedPercent > elapsed + 5;
+
+        return PopupCard(
+            VStack(
+                // Header
+                Grid(
+                    Label(AppStrings.IsKoreanStatic ? "사용 상세" : "Usage details")
+                        .FontSize(12).FontAttributes(MauiControls.FontAttributes.Bold).TextColor(AppColors.PopupText1).VCenter(),
+                    Label(AppStrings.LastRefreshed(State.LastRefreshed))
+                        .FontSize(10).TextColor(AppColors.PopupText3).VCenter().GridColumn(1)
+                ).Columns("*, Auto"),
+
+                // 기간 경과율
+                DetailRow(
+                    AppStrings.IsKoreanStatic ? "기간 경과율" : "Period elapsed",
+                    $"{elapsed:F0}%",
+                    AppColors.PopupText1),
+
+                // 소비 속도
+                Grid(
+                    Label(AppStrings.IsKoreanStatic ? "소비 속도" : "Usage pace")
+                        .FontSize(11).TextColor(AppColors.PopupText3).VCenter(),
+                    Badge(
+                        isFast ? AppStrings.ClaudePaceFast : AppStrings.ClaudePaceNormal,
+                        isFast ? AppColors.StatusErrorBg : AppColors.StatusSuccessBg,
+                        isFast ? AppColors.StatusError : AppColors.StatusSuccess
+                    ).GridColumn(1)
+                ).Columns("*, Auto"),
+
+                // Divider
+                BoxView().HeightRequest(1).Color(AppColors.PopupBorder).Margin(0, 6),
+
+                // 사용량 vs 경과
+                Grid(
+                    Label(AppStrings.IsKoreanStatic ? "사용량 vs 경과" : "Usage vs elapsed")
+                        .FontSize(11).TextColor(AppColors.PopupText3).VCenter(),
+                    Label($"{w.UsedPercent:F0}% / {elapsed:F0}%")
+                        .FontSize(11).FontAttributes(MauiControls.FontAttributes.Bold)
+                        .TextColor(AppColors.StatusError).VCenter().GridColumn(1)
+                ).Columns("*, Auto"),
+
+                // 차이 노트
+                Label(AppStrings.IsKoreanStatic
+                    ? $"사용량이 경과율보다 {w.UsedPercent - elapsed:F0}%p {(w.UsedPercent > elapsed ? "앞서 있음" : "뒤처져 있음")}"
+                    : $"Usage is {Math.Abs(w.UsedPercent - elapsed):F0}%p {(w.UsedPercent > elapsed ? "ahead of" : "behind")} elapsed")
+                    .FontSize(10).TextColor(AppColors.PopupText3)
+            ).Spacing(4).Padding(11, 13)
+        );
+    }
+
+    static VisualNode DetailRow(string label, string value, Color valueColor)
+        => Grid(
+            Label(label).FontSize(11).TextColor(AppColors.PopupText3).VCenter(),
+            Label(value).FontSize(11).TextColor(valueColor).VCenter().GridColumn(1)
+        ).Columns("*, Auto");
+
+    static Border Badge(string text, Color bg, Color fg)
+        => Border(
+            Label(text).FontSize(10).FontAttributes(MauiControls.FontAttributes.Bold).TextColor(fg)
+                .Padding(8, 2)
+        )
+        .BackgroundColor(bg)
+        .Stroke(Colors.Transparent)
+        .StrokeCornerRadius(5);
+
+    static VisualNode PopupCard(VisualNode content)
         => Border(content)
-            .BackgroundColor(AppColors.CardBackground)
-            .Stroke(AppColors.DividerColor)
-            .StrokeThickness(1)
-            .StrokeShape(RoundRectangle());
+            .BackgroundColor(AppColors.PopupSurface)
+            .Stroke(Colors.Transparent)
+            .StrokeCornerRadius(9);
 }

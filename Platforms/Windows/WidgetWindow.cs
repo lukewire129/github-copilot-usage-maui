@@ -58,9 +58,6 @@ public class WidgetWindow
     // Context menu
     WinControls.MenuFlyout? _contextMenu;
 
-    // PopupWindow reference
-    PopupWindow? _popupWindow;
-
     // Event raised when user requests widget mode switch
     public event Action<int>? WidgetModeChangeRequested;
 
@@ -70,8 +67,6 @@ public class WidgetWindow
         _mainWindowService = mainWindowService;
         _settingsService = settingsService;
     }
-
-    public void SetPopupWindow(PopupWindow popup) => _popupWindow = popup;
 
     public void Show()
     {
@@ -577,19 +572,15 @@ public class WidgetWindow
     {
         _contextMenu = new WinControls.MenuFlyout();
 
-        // 현재 데이터로 사용률 가져오기
-        var popupData = _widgetService.PopupCurrent;
-        double copilotPct = popupData?.CopilotSummary?.PercentConsumed ?? 0;
-        double claudePct = 0;
-        if (popupData?.ClaudeSnapshot is { } cs)
-            claudePct = Math.Max(cs.SessionWindow?.UsedPercent ?? 0, cs.WeeklyWindow?.UsedPercent ?? 0);
-
-        bool isCopilotActive = _widgetService.Current?.ProviderName == "Copilot";
+        // 현재 위젯 데이터에서 사용률 가져오기
+        var current = _widgetService.Current;
+        double currentPct = current?.UsedPercent ?? 0;
+        bool isCopilotActive = current?.ProviderName == "Copilot";
 
         // ── Copilot (flat, no submenu) ──
         var copilotItem = new WinControls.MenuFlyoutItem
         {
-            Text = isCopilotActive ? "  Copilot  ✓" : $"  Copilot       {copilotPct:F0}%",
+            Text = isCopilotActive ? "  Copilot  ✓" : "  Copilot",
         };
         _ = SetMenuItemIconAsync(copilotItem, "providericon_copilot.svg");
         copilotItem.Click += (_, _) => SwitchProvider("/ai/githubcopilot");
@@ -598,7 +589,7 @@ public class WidgetWindow
         // ── Claude (flat, no submenu) ──
         var claudeItem = new WinControls.MenuFlyoutItem
         {
-            Text = !isCopilotActive ? "  Claude  ✓" : $"  Claude       {claudePct:F0}%",
+            Text = !isCopilotActive ? "  Claude  ✓" : "  Claude",
         };
         _ = SetMenuItemIconAsync(claudeItem, "providericon_claude.svg");
         claudeItem.Click += (_, _) => SwitchProvider("/ai/claude");
@@ -912,10 +903,7 @@ public class WidgetWindow
 
     void OnWidgetTapped(object sender, TappedRoutedEventArgs e)
     {
-        if (_popupWindow is not null)
-            _popupWindow.Toggle();
-        else
-            _mainWindowService?.Toggle();
+        _mainWindowService?.Toggle();
     }
 
     void OnWidgetRightTapped(object sender, RightTappedRoutedEventArgs e)

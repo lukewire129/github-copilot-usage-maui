@@ -7,6 +7,11 @@ class GitHubCopilotService
 {
     readonly HttpClient _http = new();
 
+    static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(1);
+    UsageSummary? _cachedSummary;
+    int _cachedMonths;
+    DateTime _cacheTimestamp;
+
     public async Task<string> GetGhTokenAsync()
     {
         string ghPath = ResolveGhPath()
@@ -160,8 +165,11 @@ class GitHubCopilotService
         return (planName, entitlement);
     }
 
-    public async Task<UsageSummary> GetUsageSummaryAsync(int months)
+    public async Task<UsageSummary> GetUsageSummaryAsync(int months, bool forceRefresh = false)
     {
+        if (!forceRefresh && _cachedSummary is not null && _cachedMonths == months &&
+            DateTime.UtcNow - _cacheTimestamp < CacheTtl)
+            return _cachedSummary;
         string token = await GetGhTokenAsync();
         string username = await GetUsernameAsync(token);
 
@@ -196,7 +204,11 @@ class GitHubCopilotService
             await FetchMonthAsync(token, username, prev.Year, prev.Month);
         }
 
-        return CalculateSummary(recentDays, mtdUsed, quota, planName, today, mtdModels);
+        var result = CalculateSummary(recentDays, mtdUsed, quota, planName, today, mtdModels);
+        _cachedSummary = result;
+        _cachedMonths = months;
+        _cacheTimestamp = DateTime.UtcNow;
+        return result;
     }
 
     async Task<(double total, double quota, Dictionary<string, double> models)> FetchMonthAsync(

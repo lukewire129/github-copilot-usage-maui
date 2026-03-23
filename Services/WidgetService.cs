@@ -13,43 +13,10 @@ public class WidgetService
     /// </summary>
     public event Func<Task>? RefreshRequested;
 
-    // ── Popup 데이터 채널 ──
-    internal PopupData? PopupCurrent { get; private set; }
-    internal event Action<PopupData>? PopupDataChanged;
-
     public void Update(WidgetData data)
     {
         Current = data;
         DataChanged?.Invoke(data);
-    }
-
-    /// <summary>
-    /// 팝업에 표시할 전체 데이터 업데이트 (Copilot 또는 Claude 쪽에서 호출)
-    /// </summary>
-    internal void UpdatePopup(PopupData data)
-    {
-        PopupCurrent = data;
-        PopupDataChanged?.Invoke(data);
-    }
-
-    /// <summary>
-    /// Copilot 데이터만 갱신 (기존 Claude 데이터 유지)
-    /// </summary>
-    internal void UpdateCopilotPopup(UsageSummary summary)
-    {
-        var popup = PopupCurrent ?? new PopupData();
-        popup.CopilotSummary = summary;
-        UpdatePopup(popup);
-    }
-
-    /// <summary>
-    /// Claude 데이터만 갱신 (기존 Copilot 데이터 유지)
-    /// </summary>
-    internal void UpdateClaudePopup(ClaudeUsageSnapshot snapshot)
-    {
-        var popup = PopupCurrent ?? new PopupData();
-        popup.ClaudeSnapshot = snapshot;
-        UpdatePopup(popup);
     }
 
     /// <summary>

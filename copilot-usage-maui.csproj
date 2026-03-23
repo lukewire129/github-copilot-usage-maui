@@ -54,5 +54,6 @@
 	</ItemGroup>
 	<ItemGroup>
 	  <Folder Include="Features\GithubCopilot\Components\" />
+	  <Folder Include="Features\Widget\" />
 	</ItemGroup>
 </Project>

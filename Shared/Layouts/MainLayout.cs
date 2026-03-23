@@ -1,5 +1,7 @@
+using copilot_usage_maui.Features.GithubCopilot.Components;
 using copilot_usage_maui.Services;
 using MauiReactor.Parameters;
+using MauiReactor.Shapes;
 using ReactorRouter.Components;
 using ReactorRouter.Navigation;
 
@@ -55,8 +57,9 @@ partial class MainLayout : Component
                             .FontSize(13)
                             .WidthRequest(28)
                             .HeightRequest(28),
+
                         // 핀 버튼
-                        Button(isPinned ? "📌" : "\uE718")
+                        Button(isPinned ? "📌" : "📍")
                             .OnClicked(TogglePin)
                             .BackgroundColor(isPinned ? Color.FromArgb("#E6F1FB") : Colors.Transparent)
                             .TextColor(isPinned ? Color.FromArgb("#185FA5") : AppColors.PopupText3)
@@ -96,14 +99,25 @@ partial class MainLayout : Component
             textColor = AppColors.PopupText3;
         }
 
-        return Button(provider.Name)
-            .OnClicked(() => NavigationService.Instance.NavigateTo(provider.Url))
+        return Border(
+                    HStack(
+                        Label(provider.Name)
+                            .TextColor(textColor)
+                            .FontSize(11)
+                            .FontAttributes(MauiControls.FontAttributes.Bold),
+                        new SvgIcon()
+                            .FileName(provider.Icon)
+                            .Size(16)
+                            .TintColor(textColor)
+                    )
+                    .Spacing(3)
+                    .InputTransparent(true)
+                )
+            .OnTapped(() => NavigationService.Instance.NavigateTo(provider.Url))
             .BackgroundColor(bgColor)
-            .TextColor(textColor)
-            .FontSize(11)
-            .FontAttributes(MauiControls.FontAttributes.Bold)
             .Padding(12, 6)
-            .CornerRadius(8);
+            .StrokeThickness(0)
+            .StrokeShape(RoundRectangle().CornerRadius(8));
     }
 
     void TogglePin()

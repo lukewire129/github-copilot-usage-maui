@@ -18,13 +18,19 @@ public class WidgetService
         Current = data;
         DataChanged?.Invoke(data);
     }
+    // 기존 이벤트 대신 단일 핸들러로 교체
+    private Func<Task>? _refreshHandler;
 
+    public void SetRefreshHandler(Func<Task>? handler)
+    {
+        _refreshHandler = handler;
+    }
     /// <summary>
     /// Deskband Refresh 버튼 → 현재 활성 페이지에 강제 새로고침 요청
     /// </summary>
     public async Task RequestRefreshAsync()
     {
-        if (RefreshRequested is not null)
-            await RefreshRequested.Invoke();
+        if (_refreshHandler is not null)
+            await _refreshHandler();
     }
 }

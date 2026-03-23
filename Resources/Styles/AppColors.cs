@@ -6,15 +6,12 @@ static class AppColors
 
     // ── Text ──
     public static Color TextSecondary => IsDark ? Color.FromArgb("#AAAAAA") : Color.FromArgb("#595959");
-    public static Color TextOutput => IsDark ? Color.FromArgb("#CCCCCC") : Colors.DarkSlateGray;
-    public static Color TextModelName => IsDark ? Color.FromArgb("#BBBBBB") : Colors.DarkGray;
     public static Color TextOnAccent => Colors.White;
     public static Color Accent => Colors.RoyalBlue;
 
     // ── Surface ──
     public static Color CardBackground => IsDark ? Color.FromArgb("#2A2A2A") : Color.FromArgb("#F5F5F5");
     public static Color DividerColor => IsDark ? Color.FromArgb("#444444") : Colors.LightGray;
-    public static Color CopyButtonBg => IsDark ? Color.FromArgb("#3A3A3A") : Colors.LightGray;
     public static Color CopyButtonText => IsDark ? Colors.White : Colors.Black;
 
     // ── Status (60/80 임계값) ──
@@ -32,13 +29,9 @@ static class AppColors
 
     // ── Brand: Copilot ──
     public static Color CopilotPrimary => Color.FromArgb("#6E40C9");
-    public static Color CopilotLight => Color.FromArgb("#8B5FD4");
-    public static Color CopilotDark => Color.FromArgb("#553098");
 
     // ── Brand: Claude ──
     public static Color ClaudePrimary => Color.FromArgb("#D97757");
-    public static Color ClaudeLight => Color.FromArgb("#E89A7F");
-    public static Color ClaudeDark => Color.FromArgb("#B35C3A");
 
     // ── Popup surface tokens ──
     public static Color PopupPage => IsDark ? Color.FromArgb("#121212") : Colors.White;

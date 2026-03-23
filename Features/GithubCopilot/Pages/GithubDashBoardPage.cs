@@ -96,39 +96,42 @@ partial class GithubDashBoardPage : Component<GithubDashBoardPageState>
 
     bool IsDark => MauiControls.Application.Current?.RequestedTheme == AppTheme.Dark;
 
+    bool _initialized = false;
     protected override async void OnMounted()
     {
-        base.OnMounted();
-        _providerStateParam.Set(p =>
+        SettingsService.SetAutoRefreshInterval(OnAutoRefreshIntervalChanged);
+        _widgetService.SetRefreshHandler(OnWidgetRefreshRequested);
+        if (!_initialized)
         {
-            p.Providers = p.Providers
-            .Select(x => new ProviderState
+            _providerStateParam.Set(p =>
             {
-                Name = x.Name,
-                Icon = x.Icon,
-                Url = x.Url,
-                IsSelected = x.Url == "/ai/githubcopilot"
-            })
-            .ToArray();
-        });
+                p.Providers = p.Providers
+                    .Select(x => new ProviderState
+                    {
+                        Name = x.Name,
+                        Icon = x.Icon,
+                        Url = x.Url,
+                        IsSelected = x.Url == "/ai/githubcopilot"
+                    })
+                    .ToArray();
+            });
+            _initialized = true;
+        }
 
         SetState(s => s.AutoRefreshIntervalMs = SettingsService.GetAutoRefreshIntervalMs(_settingsService.AutoRefreshInterval));
-        SettingsService.AutoRefreshIntervalChanged += OnAutoRefreshIntervalChanged;
-        _widgetService.RefreshRequested += OnWidgetRefreshRequested;
         await LoadData();
     }
 
     protected override void OnWillUnmount()
     {
-        SettingsService.AutoRefreshIntervalChanged -= OnAutoRefreshIntervalChanged;
-        _widgetService.RefreshRequested -= OnWidgetRefreshRequested;
-        base.OnWillUnmount();
+        SettingsService.SetAutoRefreshInterval(null);
+        _widgetService.SetRefreshHandler(null);
     }
 
     async Task OnWidgetRefreshRequested() => await LoadData(forceRefresh: true);
 
-    void OnAutoRefreshIntervalChanged(object? sender, EventArgs e)
-        => SetState(s => s.AutoRefreshIntervalMs = SettingsService.GetAutoRefreshIntervalMs(_settingsService.AutoRefreshInterval));
+    void OnAutoRefreshIntervalChanged(int intervalMs)
+        => SetState(s => s.AutoRefreshIntervalMs = intervalMs);
 
     async Task RunAuthRefresh()
     {

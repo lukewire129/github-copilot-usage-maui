@@ -52,7 +52,10 @@ public class WidgetWindow
 
     bool _isDeskbandMode;
     bool _isFloatingMode;
+    bool _isHorizontalFloatingMode;
     bool _isDarkTaskbar;
+
+    bool IsAnyFloatingMode => _isFloatingMode || _isHorizontalFloatingMode;
     MUX.DispatcherTimer? _repositionTimer;
 
     // Context menu
@@ -73,8 +76,23 @@ public class WidgetWindow
         // 모드 결정: 저장된 설정 기반, Win10이면 항상 Floating
         int savedMode = _settingsService?.WidgetMode ?? 0;
         bool canDeskband = IsWindows11OrLater();
-        _isFloatingMode = (savedMode == 1) || !canDeskband;
-        _isDeskbandMode = !_isFloatingMode && canDeskband;
+
+        _isDeskbandMode = false;
+        _isFloatingMode = false;
+        _isHorizontalFloatingMode = false;
+
+        switch (savedMode)
+        {
+            case 0 when canDeskband:
+                _isDeskbandMode = true;
+                break;
+            case 2:
+                _isHorizontalFloatingMode = true;
+                break;
+            default: // mode 1, or mode 0 on Win10
+                _isFloatingMode = true;
+                break;
+        }
         _isDarkTaskbar = IsTaskbarDarkTheme();
 
         _window = new MUX.Window();
@@ -104,7 +122,7 @@ public class WidgetWindow
         _window.Content = _contentRoot;
 
 
-        if (_isFloatingMode)
+        if (IsAnyFloatingMode)
         {
             // Win32 스타일에서도 캡션/두꺼운 프레임 제거
             int style = GetWindowLong(_hwnd, GWL_STYLE);
@@ -116,7 +134,12 @@ public class WidgetWindow
             // Fluent 라운드 코너 (8px) - Windows 11+
             int cornerPref = DWMWCP_ROUND; // 라운드 코너
             DwmSetWindowAttribute(_hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, ref cornerPref, sizeof(int));
-            PositionAsFloating();
+
+            if (_isHorizontalFloatingMode)
+                PositionAsHorizontalFloating();
+            else
+                PositionAsFloating();
+
             SetupFloatingDrag();
         }
         else if (_isDeskbandMode)
@@ -287,6 +310,32 @@ public class WidgetWindow
         _appWindow!.MoveAndResize(new RectInt32(x, y, widgetWidth, widgetHeight));
     }
 
+    void PositionAsHorizontalFloating()
+    {
+        if (_appWindow?.Presenter is OverlappedPresenter presenter)
+        {
+            presenter.IsAlwaysOnTop = true;
+            presenter.IsResizable = false;
+        }
+
+        int widgetWidth = 240;
+        int widgetHeight = 48;
+
+        int x = _settingsService?.HFloatingWidgetX ?? -1;
+        int y = _settingsService?.HFloatingWidgetY ?? -1;
+
+        if (x < 0 || y < 0)
+        {
+            var displayArea = DisplayArea.GetFromWindowId(
+                _appWindow!.Id, DisplayAreaFallback.Primary);
+            var workArea = displayArea.WorkArea;
+            x = workArea.X + workArea.Width - widgetWidth - 12;
+            y = workArea.Y + 12;
+        }
+
+        _appWindow!.MoveAndResize(new RectInt32(x, y, widgetWidth, widgetHeight));
+    }
+
     /// <summary>
     /// XAML ManipulationDelta 기반 드래그 — Tapped/RightTapped와 공존 가능
     /// </summary>
@@ -309,8 +358,16 @@ public class WidgetWindow
             if (_appWindow is not null && _settingsService is not null)
             {
                 var pos = _appWindow.Position;
-                _settingsService.FloatingWidgetX = pos.X;
-                _settingsService.FloatingWidgetY = pos.Y;
+                if (_isHorizontalFloatingMode)
+                {
+                    _settingsService.HFloatingWidgetX = pos.X;
+                    _settingsService.HFloatingWidgetY = pos.Y;
+                }
+                else
+                {
+                    _settingsService.FloatingWidgetX = pos.X;
+                    _settingsService.FloatingWidgetY = pos.Y;
+                }
             }
         };
     }
@@ -333,7 +390,9 @@ public class WidgetWindow
 
     MUX.UIElement BuildContent()
     {
-        return _isFloatingMode ? BuildFloatingContent() : BuildDeskbandContent();
+        if (_isFloatingMode) return BuildFloatingContent();
+        if (_isHorizontalFloatingMode) return BuildHorizontalFloatingContent();
+        return BuildDeskbandContent();
     }
 
     /// <summary>
@@ -445,6 +504,125 @@ public class WidgetWindow
         // Hidden provider text (used by UpdateUI but not displayed in floating capsule)
         _providerText = new WinControls.TextBlock { Visibility = MUX.Visibility.Collapsed };
         root.Children.Add(_providerText);
+
+        return root;
+    }
+
+    /// <summary>
+    /// Horizontal floating mode: 가로 캡슐 위젯 (240×48)
+    /// Copilot: [BrandIcon 18px] [Donut 20px] [62%] [9d]
+    /// Claude:  [BrandIcon 18px] [S] [Donut 18px] [25%] · [W] [Donut 18px] [95%]
+    /// </summary>
+    MUX.UIElement BuildHorizontalFloatingContent()
+    {
+        bool dark = IsSystemDarkTheme();
+
+        var bgColor = dark
+            ? ColorHelper.FromArgb(220, 28, 28, 28)
+            : ColorHelper.FromArgb(220, 250, 250, 250);
+
+        var textColor = dark
+            ? Microsoft.UI.Colors.White
+            : ColorHelper.FromArgb(255, 30, 30, 30);
+
+        var dimTextColor = dark
+            ? ColorHelper.FromArgb(180, 255, 255, 255)
+            : ColorHelper.FromArgb(180, 30, 30, 30);
+
+        var root = new WinControls.StackPanel
+        {
+            Orientation = WinControls.Orientation.Horizontal,
+            Background = new WinMedia.SolidColorBrush(bgColor),
+            Padding = new MUX.Thickness(10, 6, 10, 6),
+            VerticalAlignment = MUX.VerticalAlignment.Center,
+            Spacing = 6,
+        };
+
+        // Brand icon
+        _iconImage = new WinControls.Image
+        {
+            Width = 18,
+            Height = 18,
+            VerticalAlignment = MUX.VerticalAlignment.Center,
+        };
+        root.Children.Add(_iconImage);
+
+        // ── Session column (Claude only, hidden by default) ──
+        _sessionLabel = new WinControls.TextBlock
+        {
+            Text = "S",
+            FontSize = 9,
+            Foreground = new WinMedia.SolidColorBrush(dimTextColor),
+            VerticalAlignment = MUX.VerticalAlignment.Center,
+        };
+        _sessionDonutImage = new WinControls.Image
+        {
+            Width = 18,
+            Height = 18,
+            VerticalAlignment = MUX.VerticalAlignment.Center,
+        };
+        _sessionPercentText = new WinControls.TextBlock
+        {
+            FontSize = 11,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            VerticalAlignment = MUX.VerticalAlignment.Center,
+        };
+
+        // Dot separator
+        var dotSep = new MUX.Shapes.Ellipse
+        {
+            Width = 3,
+            Height = 3,
+            Fill = new WinMedia.SolidColorBrush(dimTextColor),
+            VerticalAlignment = MUX.VerticalAlignment.Center,
+        };
+
+        _sessionColumn = new WinControls.StackPanel
+        {
+            Orientation = WinControls.Orientation.Horizontal,
+            Spacing = 4,
+            VerticalAlignment = MUX.VerticalAlignment.Center,
+            Visibility = MUX.Visibility.Collapsed,
+            Children = { _sessionLabel, _sessionDonutImage, _sessionPercentText, dotSep },
+        };
+        root.Children.Add(_sessionColumn);
+
+        // ── Main donut (weekly/total) ──
+        // Weekly label (W) for Claude, hidden for Copilot
+        var weeklyLabel = new WinControls.TextBlock
+        {
+            Text = "W",
+            FontSize = 9,
+            Foreground = new WinMedia.SolidColorBrush(dimTextColor),
+            VerticalAlignment = MUX.VerticalAlignment.Center,
+            Visibility = MUX.Visibility.Collapsed,
+        };
+        _providerText = weeklyLabel;
+
+        _donutImage = new WinControls.Image
+        {
+            Width = 20,
+            Height = 20,
+            VerticalAlignment = MUX.VerticalAlignment.Center,
+        };
+        _percentText = new WinControls.TextBlock
+        {
+            FontSize = 11,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = new WinMedia.SolidColorBrush(textColor),
+            VerticalAlignment = MUX.VerticalAlignment.Center,
+        };
+        _resetText = new WinControls.TextBlock
+        {
+            FontSize = 9,
+            Foreground = new WinMedia.SolidColorBrush(dimTextColor),
+            VerticalAlignment = MUX.VerticalAlignment.Center,
+        };
+
+        root.Children.Add(weeklyLabel);
+        root.Children.Add(_donutImage);
+        root.Children.Add(_percentText);
+        root.Children.Add(_resetText);
 
         return root;
     }
@@ -631,11 +809,19 @@ public class WidgetWindow
 
         var floatingToggle = new WinControls.ToggleMenuFlyoutItem
         {
-            Text = "Floating Widget",
+            Text = "Floating (Vertical)",
             IsChecked = _isFloatingMode,
         };
         floatingToggle.Click += (_, _) => RequestModeSwitch(1);
         widgetModeSubMenu.Items.Add(floatingToggle);
+
+        var hFloatingToggle = new WinControls.ToggleMenuFlyoutItem
+        {
+            Text = "Floating (Horizontal)",
+            IsChecked = _isHorizontalFloatingMode,
+        };
+        hFloatingToggle.Click += (_, _) => RequestModeSwitch(2);
+        widgetModeSubMenu.Items.Add(hFloatingToggle);
 
         _contextMenu.Items.Add(widgetModeSubMenu);
 
@@ -746,9 +932,9 @@ public class WidgetWindow
         var color = DonutRenderer.GetStatusWinColor(data.UsedPercent);
         var brush = new WinMedia.SolidColorBrush(color);
 
-        if (_isDeskbandMode)
+        if (_isDeskbandMode || _isHorizontalFloatingMode)
         {
-            // ── Deskband 모드 ──
+            // ── Deskband / Horizontal Floating 모드 ──
             _resetText!.Text = ShortenResetText(data.ResetTimeText);
 
             bool isClaude = data.SessionUsedPercent.HasValue;

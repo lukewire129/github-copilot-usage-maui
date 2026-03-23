@@ -61,7 +61,11 @@ public class SettingsService
 
     const string KeyAutoRefreshInterval = "auto_refresh_interval";
 
-    public static event EventHandler? AutoRefreshIntervalChanged;
+    private static Action<int>? _autoRefreshIntervalHandler;
+    public static void SetAutoRefreshInterval(Action<int>? handler)
+    {
+        _autoRefreshIntervalHandler = handler;
+    }
 
     // 0=Off, 1=10분, 2=30분, 3=1시간
     public int AutoRefreshInterval
@@ -70,7 +74,8 @@ public class SettingsService
         set
         {
             Preferences.Default.Set(KeyAutoRefreshInterval, value);
-            AutoRefreshIntervalChanged?.Invoke(null, EventArgs.Empty);
+            if (_autoRefreshIntervalHandler is not null)
+                _autoRefreshIntervalHandler(GetAutoRefreshIntervalMs(value));
         }
     }
 
@@ -82,11 +87,13 @@ public class SettingsService
         _ => 0
     };
 
-    const string KeyWidgetMode      = "widget_mode";
+    const string KeyWidgetMode = "widget_mode";
     const string KeyFloatingWidgetX = "floating_widget_x";
     const string KeyFloatingWidgetY = "floating_widget_y";
+    const string KeyHFloatingWidgetX = "hfloating_widget_x";
+    const string KeyHFloatingWidgetY = "hfloating_widget_y";
 
-    // 0 = DeskBand (Win11+), 1 = Floating
+    // 0 = DeskBand (Win11+), 1 = Floating (Vertical), 2 = Floating (Horizontal)
     public int WidgetMode
     {
         get => Preferences.Default.Get(KeyWidgetMode, 0);
@@ -103,5 +110,17 @@ public class SettingsService
     {
         get => Preferences.Default.Get(KeyFloatingWidgetY, -1);
         set => Preferences.Default.Set(KeyFloatingWidgetY, value);
+    }
+
+    public int HFloatingWidgetX
+    {
+        get => Preferences.Default.Get(KeyHFloatingWidgetX, -1);
+        set => Preferences.Default.Set(KeyHFloatingWidgetX, value);
+    }
+
+    public int HFloatingWidgetY
+    {
+        get => Preferences.Default.Get(KeyHFloatingWidgetY, -1);
+        set => Preferences.Default.Set(KeyHFloatingWidgetY, value);
     }
 }

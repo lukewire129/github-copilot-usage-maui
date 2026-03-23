@@ -30,40 +30,45 @@ partial class ClaudeDashBoardPage : Component<ClaudeDashBoardPageState>
 
     bool IsDark => MauiControls.Application.Current?.RequestedTheme == AppTheme.Dark;
 
+    bool _initialized = false;
     protected override async void OnMounted()
     {
-        base.OnMounted();
+        System.Diagnostics.Debug.WriteLine($"[{GetType().Name}] OnMounted called!");
+        SettingsService.SetAutoRefreshInterval(OnAutoRefreshIntervalChanged);
 
-        _providerStateParam.Set(p =>
+        _widgetService.SetRefreshHandler(OnWidgetRefreshRequested);
+        if (!_initialized)
         {
-            p.Providers = p.Providers
-                .Select(x => new ProviderState
-                {
-                    Name = x.Name,
-                    Icon = x.Icon,
-                    Url = x.Url,
-                    IsSelected = x.Url == "/ai/claude"
-                })
-                .ToArray();
-        });
+            _providerStateParam.Set(p =>
+            {
+                p.Providers = p.Providers
+                    .Select(x => new ProviderState
+                    {
+                        Name = x.Name,
+                        Icon = x.Icon,
+                        Url = x.Url,
+                        IsSelected = x.Url == "/ai/claude"
+                    })
+                    .ToArray();
+            });
+            _initialized = true;
+        }
 
         SetState(s => s.AutoRefreshIntervalMs = SettingsService.GetAutoRefreshIntervalMs(_settingsService.AutoRefreshInterval));
-        SettingsService.AutoRefreshIntervalChanged += OnAutoRefreshIntervalChanged;
-        _widgetService.RefreshRequested += OnWidgetRefreshRequested;
         await LoadData();
     }
 
     protected override void OnWillUnmount()
     {
-        SettingsService.AutoRefreshIntervalChanged -= OnAutoRefreshIntervalChanged;
-        _widgetService.RefreshRequested -= OnWidgetRefreshRequested;
-        base.OnWillUnmount();
+        System.Diagnostics.Debug.WriteLine($"[{GetType().Name}] OnWillUnmount called!");
+        SettingsService.SetAutoRefreshInterval(null);
+        _widgetService.SetRefreshHandler(null);
     }
 
     async Task OnWidgetRefreshRequested() => await LoadData(forceRefresh: true);
 
-    void OnAutoRefreshIntervalChanged(object? sender, EventArgs e)
-        => SetState(s => s.AutoRefreshIntervalMs = SettingsService.GetAutoRefreshIntervalMs(_settingsService.AutoRefreshInterval));
+    void OnAutoRefreshIntervalChanged(int intervalMs)
+        => SetState(s => s.AutoRefreshIntervalMs = intervalMs);
 
     async Task LoadData(bool forceRefresh = false)
     {

@@ -94,22 +94,28 @@ public class WidgetWindow
 
         // Hide from Alt+Tab & taskbar
         _appWindow.IsShownInSwitchers = false;
-        int exStyle = GetWindowLong(_hwnd, GWL_EXSTYLE);
-        SetWindowLong(_hwnd, GWL_EXSTYLE, exStyle | WS_EX_TOOLWINDOW);
+        // int style = GetWindowLong(_hwnd, GWL_STYLE);
+        // style &= ~(WS_CAPTION | WS_THICKFRAME);
+        // SetWindowLong(_hwnd, GWL_STYLE, style);
 
-        _window.SystemBackdrop = new MUX.Media.MicaBackdrop();
-
-        // Hide window border
-        int borderColor = unchecked((int)0xFFFFFFFE); // DWMWA_COLOR_NONE
-        DwmSetWindowAttribute(_hwnd, DWMWA_BORDER_COLOR, ref borderColor, sizeof(int));
-
+        // _window.SystemBackdrop = new MUX.Media.MicaBackdrop();
         // Build UI
         _contentRoot = BuildContent();
         _window.Content = _contentRoot;
-        _window.Activate();
+
 
         if (_isFloatingMode)
         {
+            // Win32 스타일에서도 캡션/두꺼운 프레임 제거
+            int style = GetWindowLong(_hwnd, GWL_STYLE);
+            style &= ~(WS_CAPTION | WS_THICKFRAME);
+            SetWindowLong(_hwnd, GWL_STYLE, style);
+            SetWindowPos(_hwnd, IntPtr.Zero, 0, 0, 0, 0,
+                SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+
+            // Fluent 라운드 코너 (8px) - Windows 11+
+            int cornerPref = DWMWCP_ROUND; // 라운드 코너
+            DwmSetWindowAttribute(_hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, ref cornerPref, sizeof(int));
             PositionAsFloating();
             SetupFloatingDrag();
         }
@@ -129,6 +135,7 @@ public class WidgetWindow
             _contentRoot.Tapped += OnWidgetTapped;
             _contentRoot.RightTapped += OnWidgetRightTapped;
         }
+        _window.Activate();
     }
 
     public void Close()
@@ -261,7 +268,7 @@ public class WidgetWindow
             presenter.IsResizable = false;
         }
 
-        int widgetWidth  = 60;
+        int widgetWidth = 60;
         int widgetHeight = 160;
 
         int x = _settingsService?.FloatingWidgetX ?? -1;
@@ -352,11 +359,7 @@ public class WidgetWindow
             HorizontalAlignment = MUX.HorizontalAlignment.Center,
             Padding = new MUX.Thickness(8, 10, 8, 10),
             Spacing = 5,
-            Background = new WinMedia.SolidColorBrush(bgColor),
-            CornerRadius = new MUX.CornerRadius(22),
-            BorderBrush = new WinMedia.SolidColorBrush(
-                dark ? ColorHelper.FromArgb(255, 51, 51, 51) : ColorHelper.FromArgb(255, 232, 230, 225)),
-            BorderThickness = new MUX.Thickness(1),
+            Background = new WinMedia.SolidColorBrush(bgColor)
         };
 
         // Brand icon
@@ -676,13 +679,22 @@ public class WidgetWindow
     {
         try
         {
-            if (!_svgCache.TryGetValue(svgFileName, out var svgBytes))
+            string cacheKey = $"tinted_{svgFileName}";
+
+            if (!_svgCache.TryGetValue(cacheKey, out var svgBytes))
             {
-                using var stream = await Microsoft.Maui.Storage.FileSystem.OpenAppPackageFileAsync(svgFileName);
+                using var stream = await FileSystem.OpenAppPackageFileAsync(svgFileName);
                 using var reader = new StreamReader(stream);
                 var svgContent = await reader.ReadToEndAsync();
+
+                svgContent = System.Text.RegularExpressions.Regex.Replace(
+                    svgContent, @"fill=""[^""]*""", @"fill=""#676780""");
+                svgContent = System.Text.RegularExpressions.Regex.Replace(
+                    svgContent, @"fill:[^;""]+", "fill:#676780");
+
+
                 svgBytes = System.Text.Encoding.UTF8.GetBytes(svgContent);
-                _svgCache[svgFileName] = svgBytes;
+                _svgCache[cacheKey] = svgBytes;
             }
 
             _window?.DispatcherQueue?.TryEnqueue(async () =>
@@ -862,7 +874,7 @@ public class WidgetWindow
     {
         try
         {
-            string cacheKey = _isDeskbandMode ? $"tinted_{fileName}" : fileName;
+            string cacheKey = $"tinted_{fileName}";
 
             if (!_svgCache.TryGetValue(cacheKey, out var svgBytes))
             {
@@ -870,13 +882,11 @@ public class WidgetWindow
                 using var reader = new StreamReader(stream);
                 var svgContent = await reader.ReadToEndAsync();
 
-                if (_isDeskbandMode)
-                {
-                    svgContent = System.Text.RegularExpressions.Regex.Replace(
-                        svgContent, @"fill=""[^""]*""", @"fill=""#676780""");
-                    svgContent = System.Text.RegularExpressions.Regex.Replace(
-                        svgContent, @"fill:[^;""]+", "fill:#676780");
-                }
+                svgContent = System.Text.RegularExpressions.Regex.Replace(
+                    svgContent, @"fill=""[^""]*""", @"fill=""#676780""");
+                svgContent = System.Text.RegularExpressions.Regex.Replace(
+                    svgContent, @"fill:[^;""]+", "fill:#676780");
+
 
                 svgBytes = System.Text.Encoding.UTF8.GetBytes(svgContent);
                 _svgCache[cacheKey] = svgBytes;
@@ -955,14 +965,12 @@ public class WidgetWindow
     const uint SWP_NOZORDER = 0x0004;
     const uint SWP_NOACTIVATE = 0x0010;
     const uint SWP_FRAMECHANGED = 0x0020;
-    const uint WM_NCHITTEST    = 0x0084;
+    const uint WM_NCHITTEST = 0x0084;
     const uint WM_EXITSIZEMOVE = 0x0232;
-    const int  HTCAPTION       = 2;
-
+    const int HTCAPTION = 2;
+    const uint SWP_NOSIZE = 0x0001;
     [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr hWnd, int nIndex);
     [DllImport("user32.dll")] static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
-    [DllImport("user32.dll")] static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
-    [DllImport("user32.dll")] static extern IntPtr CallWindowProc(IntPtr lpPrevWndFunc, IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr FindWindow(string? lpClassName, string? lpWindowName);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr FindWindowEx(IntPtr hWndParent, IntPtr hWndChildAfter, string? lpszClass, string? lpszWindow);
     [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
@@ -972,7 +980,10 @@ public class WidgetWindow
     [DllImport("gdi32.dll")] static extern IntPtr CreateRoundRectRgn(int x1, int y1, int x2, int y2, int cx, int cy);
     [DllImport("user32.dll")] static extern int SetWindowRgn(IntPtr hWnd, IntPtr hRgn, bool bRedraw);
     [DllImport("user32.dll")] static extern uint GetDpiForWindow(IntPtr hwnd);
-    const int DWMWA_BORDER_COLOR = 34;
+    const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+    const int DWMWCP_ROUND = 2; // 22px 라운드
+    const int WS_CAPTION = 0x00C00000;
+    const int WS_THICKFRAME = 0x00040000;
     [DllImport("dwmapi.dll", PreserveSig = true)]
     static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int pvAttribute, int cbAttribute);
 

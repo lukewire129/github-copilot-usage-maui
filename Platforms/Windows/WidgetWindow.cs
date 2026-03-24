@@ -116,7 +116,7 @@ public class WidgetWindow
         // style &= ~(WS_CAPTION | WS_THICKFRAME);
         // SetWindowLong(_hwnd, GWL_STYLE, style);
 
-        // _window.SystemBackdrop = new MUX.Media.MicaBackdrop();
+        _window.SystemBackdrop = new MUX.Media.MicaBackdrop();
         // Build UI
         _contentRoot = BuildContent();
         _window.Content = _contentRoot;

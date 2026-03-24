@@ -245,7 +245,7 @@ partial class GithubDashBoardPage : Component<GithubDashBoardPageState>
 
             // Today + Daily Budget 미니 카드
             Grid(
-                MiniCard(AppStrings.TodayUsage, $"{s.TodayUsed:F0} req"),
+                MiniCard(AppStrings.TodayUsage, $"{s.TodayUsed:F2} req"),
                 MiniCard(AppStrings.DailyBudget, $"{dailyBudget:F1} / day").GridColumn(1)
             )
             .Columns("*, *")
@@ -329,9 +329,9 @@ partial class GithubDashBoardPage : Component<GithubDashBoardPageState>
                                 fillColor: DonutRenderer.GetStatusColor(pct, IsDark));
                         }),
                     VStack(
-                        Label($"{s.MtdUsed:F0}")
+                        Label($"{s.MtdUsed:F2}")
                             .FontSize(22).FontAttributes(MauiControls.FontAttributes.Bold).TextColor(AppColors.PopupText1),
-                        Label($"/ {s.Quota} req · {s.Remaining:F0} {(AppStrings.IsKoreanStatic ? "남음" : "left")}")
+                        Label($"/ {s.Quota} req · {s.Remaining:F2} {(AppStrings.IsKoreanStatic ? "남음" : "left")}")
                             .FontSize(10).TextColor(AppColors.PopupText3)
                     ).Spacing(2)
                 ).Spacing(8)
@@ -365,7 +365,7 @@ partial class GithubDashBoardPage : Component<GithubDashBoardPageState>
                     {
                         double pct = total > 0 ? kv.Value / total * 100 : 0;
                         var color = ModelColors[i % ModelColors.Length];
-                        return ModelRow(kv.Key, $"{kv.Value:F0} ({pct:F0}%)", color);
+                        return ModelRow(kv.Key, $"{kv.Value:F2} ({pct:F0}%)", color);
                     })
                 ).Spacing(2),
 
@@ -381,7 +381,7 @@ partial class GithubDashBoardPage : Component<GithubDashBoardPageState>
                                         : (AppStrings.IsKoreanStatic ? $"기타 {rest.Count}개 ▼" : $"{rest.Count} more ▼"))
                                     .FontSize(11).TextColor(Color.FromArgb("#185FA5"))
                             ).Spacing(5).VCenter(),
-                            Label($"{restReq:F0} ({restPct:F0}%)")
+                            Label($"{restReq:F2} ({restPct:F0}%)")
                                 .FontSize(11).FontAttributes(MauiControls.FontAttributes.Bold)
                                 .TextColor(AppColors.PopupText1).VCenter().GridColumn(1)
                         )
@@ -395,7 +395,7 @@ partial class GithubDashBoardPage : Component<GithubDashBoardPageState>
                                     double pct = total > 0 ? kv.Value / total * 100 : 0;
                                     return Grid(
                                         Label($"  {kv.Key}").FontSize(10).TextColor(AppColors.PopupText3).VCenter(),
-                                        Label($"{kv.Value:F0} ({pct:F0}%)").FontSize(10).TextColor(AppColors.PopupText2).VCenter().GridColumn(1)
+                                        Label($"{kv.Value:F2} ({pct:F0}%)").FontSize(10).TextColor(AppColors.PopupText2).VCenter().GridColumn(1)
                                     ).Columns("*, Auto");
                                 })
                             ).Spacing(2)

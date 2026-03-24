@@ -145,7 +145,9 @@ class GitHubCopilotService
         SetHeaders(req, token);
         var resp = await _http.SendAsync(req);
         resp.EnsureSuccessStatusCode();
-        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+        var rawJson = await resp.Content.ReadAsStringAsync();
+        Debug.WriteLine($"[copilot_internal/user] {rawJson}");
+        using var doc = JsonDocument.Parse(rawJson);
         var root = doc.RootElement;
 
         string plan = root.TryGetProperty("copilot_plan", out var planEl) ? planEl.GetString() ?? "" : "";

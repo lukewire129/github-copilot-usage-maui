@@ -1,26 +1,16 @@
-#if WINDOWS
 using SkiaSharp;
 
 namespace copilot_usage_maui.Helpers;
 
 /// <summary>
 /// SkiaSharp 기반 도넛 차트 렌더러.
-/// Widget(Deskband/Floating), Popup에서 공통 사용.
+/// Widget, Dashboard 페이지에서 공통 사용.
 /// </summary>
 static class DonutRenderer
 {
     /// <summary>
     /// 도넛 차트를 SKBitmap으로 렌더링
     /// </summary>
-    /// <param name="size">비트맵 크기 (정사각형)</param>
-    /// <param name="strokeWidth">도넛 두께</param>
-    /// <param name="percent">0-100 사용률</param>
-    /// <param name="trackColor">배경 트랙 색상</param>
-    /// <param name="fillColor">채움 색상</param>
-    /// <param name="centerText">중앙 텍스트 (null이면 표시 안 함)</param>
-    /// <param name="textColor">중앙 텍스트 색상</param>
-    /// <param name="fontSize">중앙 텍스트 크기</param>
-    /// <param name="scale">DPI 스케일 (기본 1.0)</param>
     public static SKBitmap Render(
         int size,
         float strokeWidth,
@@ -70,7 +60,6 @@ static class DonutRenderer
                 Color = fillColor,
                 IsAntialias = true,
             };
-            // 12시 방향(-90°)에서 시작, 시계방향
             canvas.DrawArc(rect, -90f, sweepAngle, false, fillPaint);
         }
 
@@ -84,7 +73,6 @@ static class DonutRenderer
                 Color = textColor ?? fillColor,
                 IsAntialias = true,
             };
-            // 수직 중앙 정렬
             var metrics = font.Metrics;
             float textY = cy - (metrics.Ascent + metrics.Descent) / 2f;
             canvas.DrawText(centerText, cx, textY, SKTextAlign.Center, font, textPaint);
@@ -93,6 +81,70 @@ static class DonutRenderer
         return bitmap;
     }
 
+    /// <summary>
+    /// SKCanvasView의 PaintSurface에서 직접 도넛을 그리는 메서드
+    /// </summary>
+    public static void DrawOnCanvas(
+        SKCanvas canvas,
+        int width,
+        int height,
+        float strokeWidth,
+        double percent,
+        SKColor trackColor,
+        SKColor fillColor)
+    {
+        canvas.Clear(SKColors.Transparent);
+
+        int size = Math.Min(width, height);
+        float cx = width / 2f;
+        float cy = height / 2f;
+        float radius = (size - strokeWidth) / 2f;
+
+        var rect = new SKRect(cx - radius, cy - radius, cx + radius, cy + radius);
+
+        using var trackPaint = new SKPaint
+        {
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = strokeWidth,
+            Color = trackColor,
+            IsAntialias = true,
+        };
+        canvas.DrawCircle(cx, cy, radius, trackPaint);
+
+        if (percent > 0)
+        {
+            float sweepAngle = (float)(Math.Min(percent, 100) / 100.0 * 360.0);
+            using var fillPaint = new SKPaint
+            {
+                Style = SKPaintStyle.Stroke,
+                StrokeWidth = strokeWidth,
+                StrokeCap = SKStrokeCap.Round,
+                Color = fillColor,
+                IsAntialias = true,
+            };
+            canvas.DrawArc(rect, -90f, sweepAngle, false, fillPaint);
+        }
+    }
+
+    /// <summary>
+    /// 사용률에 따른 상태 색상 반환 (60/80 임계값)
+    /// </summary>
+    public static SKColor GetStatusColor(double percent, bool isDark = false)
+    {
+        if (percent >= 80)
+            return isDark ? SKColor.Parse("#F09595") : SKColor.Parse("#E24B4A");
+        if (percent >= 60)
+            return isDark ? SKColor.Parse("#FAC775") : SKColor.Parse("#EF9F27");
+        return isDark ? SKColor.Parse("#5DCAA5") : SKColor.Parse("#1D9E75");
+    }
+
+    /// <summary>
+    /// 도넛 트랙(배경) 색상
+    /// </summary>
+    public static SKColor GetTrackColor(bool isDark)
+        => isDark ? SKColor.Parse("#444444") : SKColor.Parse("#E8E6E1");
+
+#if WINDOWS
     /// <summary>
     /// SKBitmap → WinUI3 BitmapImage (PNG 변환)
     /// </summary>
@@ -111,33 +163,15 @@ static class DonutRenderer
     }
 
     /// <summary>
-    /// 사용률에 따른 상태 색상 반환 (60/80 임계값)
-    /// </summary>
-    public static SKColor GetStatusColor(double percent, bool isDark = false)
-    {
-        if (percent >= 80)
-            return isDark ? SKColor.Parse("#F09595") : SKColor.Parse("#E24B4A");
-        if (percent >= 60)
-            return isDark ? SKColor.Parse("#FAC775") : SKColor.Parse("#EF9F27");
-        return isDark ? SKColor.Parse("#5DCAA5") : SKColor.Parse("#1D9E75");
-    }
-
-    /// <summary>
     /// 사용률에 따른 Win32 Color 반환 (위젯용)
     /// </summary>
     public static Windows.UI.Color GetStatusWinColor(double percent)
     {
         if (percent >= 80)
-            return Microsoft.UI.ColorHelper.FromArgb(255, 226, 75, 74);  // #E24B4A
+            return Microsoft.UI.ColorHelper.FromArgb(255, 226, 75, 74);
         if (percent >= 60)
-            return Microsoft.UI.ColorHelper.FromArgb(255, 239, 159, 39); // #EF9F27
-        return Microsoft.UI.ColorHelper.FromArgb(255, 29, 158, 117);     // #1D9E75
+            return Microsoft.UI.ColorHelper.FromArgb(255, 239, 159, 39);
+        return Microsoft.UI.ColorHelper.FromArgb(255, 29, 158, 117);
     }
-
-    /// <summary>
-    /// 도넛 트랙(배경) 색상
-    /// </summary>
-    public static SKColor GetTrackColor(bool isDark)
-        => isDark ? SKColor.Parse("#444444") : SKColor.Parse("#E8E6E1");
-}
 #endif
+}

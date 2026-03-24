@@ -41,6 +41,6 @@ partial class App : Component<AppState>
                 ContentPage(new Router())
            )
            .Title("GitHub Copilot Usage")
-           .Width(450)
-           .Height(900);
+           .Width(310)
+           .Height(520);
 }

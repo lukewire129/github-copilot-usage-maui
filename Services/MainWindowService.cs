@@ -61,7 +61,7 @@ public class MainWindowService
         style &= ~(WS_CAPTION | WS_THICKFRAME);
         SetWindowLong(_hwnd, GWL_STYLE, style);
         SetWindowPos(_hwnd, IntPtr.Zero, 0, 0, 0, 0,
-            SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+            SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
 
         // Fluent 라운드 코너 (8px) - Windows 11+
         int cornerPref = DWMWCP_ROUND; // 라운드 코너
@@ -105,7 +105,7 @@ public class MainWindowService
     (int targetX, int targetY, PopupDirection direction) ComputePopupPosition()
     {
         var displayArea = DisplayArea.GetFromWindowId(_appWindow!.Id, DisplayAreaFallback.Primary);
-        var screen   = displayArea.OuterBounds;
+        var screen = displayArea.OuterBounds;
         var workArea = displayArea.WorkArea;
         var popupSize = _appWindow.Size;
         int popupW = popupSize.Width;
@@ -119,14 +119,14 @@ public class MainWindowService
         else
         {
             // 위젯 없으면 우측 하단 fallback
-            widgetRect.left   = workArea.X + workArea.Width - 280 - 8;
-            widgetRect.right  = widgetRect.left + 280;
-            widgetRect.top    = workArea.Y + workArea.Height - 64;
+            widgetRect.left = workArea.X + workArea.Width - 280 - 8;
+            widgetRect.right = widgetRect.left + 280;
+            widgetRect.top = workArea.Y + workArea.Height - 64;
             widgetRect.bottom = widgetRect.top + 64;
         }
 
         int widgetCenterX = (widgetRect.left + widgetRect.right) / 2;
-        int screenMidY    = screen.Y + screen.Height / 2;
+        int screenMidY = screen.Y + screen.Height / 2;
 
         // 위젯 중심이 화면 상단 절반이면 팝업을 위젯 아래로, 하단 절반이면 위로
         var dir = ((widgetRect.top + widgetRect.bottom) / 2 < screenMidY)

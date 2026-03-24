@@ -18,7 +18,7 @@ static class AppStrings
         }
     }
 
-    /// <summary>WinUI3 네이티브 코드에서 사용 (PopupWindow 등)</summary>
+    /// <summary>WinUI3 네이티브 코드에서 사용</summary>
     public static bool IsKoreanStatic => IsKorean;
 
     // --- Dashboard ---

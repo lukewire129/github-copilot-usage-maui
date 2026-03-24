@@ -13,51 +13,24 @@ public class WidgetService
     /// </summary>
     public event Func<Task>? RefreshRequested;
 
-    // ── Popup 데이터 채널 ──
-    internal PopupData? PopupCurrent { get; private set; }
-    internal event Action<PopupData>? PopupDataChanged;
-
     public void Update(WidgetData data)
     {
         Current = data;
         DataChanged?.Invoke(data);
     }
+    // 기존 이벤트 대신 단일 핸들러로 교체
+    private Func<Task>? _refreshHandler;
 
-    /// <summary>
-    /// 팝업에 표시할 전체 데이터 업데이트 (Copilot 또는 Claude 쪽에서 호출)
-    /// </summary>
-    internal void UpdatePopup(PopupData data)
+    public void SetRefreshHandler(Func<Task>? handler)
     {
-        PopupCurrent = data;
-        PopupDataChanged?.Invoke(data);
+        _refreshHandler = handler;
     }
-
-    /// <summary>
-    /// Copilot 데이터만 갱신 (기존 Claude 데이터 유지)
-    /// </summary>
-    internal void UpdateCopilotPopup(UsageSummary summary)
-    {
-        var popup = PopupCurrent ?? new PopupData();
-        popup.CopilotSummary = summary;
-        UpdatePopup(popup);
-    }
-
-    /// <summary>
-    /// Claude 데이터만 갱신 (기존 Copilot 데이터 유지)
-    /// </summary>
-    internal void UpdateClaudePopup(ClaudeUsageSnapshot snapshot)
-    {
-        var popup = PopupCurrent ?? new PopupData();
-        popup.ClaudeSnapshot = snapshot;
-        UpdatePopup(popup);
-    }
-
     /// <summary>
     /// Deskband Refresh 버튼 → 현재 활성 페이지에 강제 새로고침 요청
     /// </summary>
     public async Task RequestRefreshAsync()
     {
-        if (RefreshRequested is not null)
-            await RefreshRequested.Invoke();
+        if (_refreshHandler is not null)
+            await _refreshHandler();
     }
 }

@@ -52,14 +52,14 @@ public class WidgetWindow
 
     bool _isDeskbandMode;
     bool _isFloatingMode;
+    bool _isHorizontalFloatingMode;
     bool _isDarkTaskbar;
+
+    bool IsAnyFloatingMode => _isFloatingMode || _isHorizontalFloatingMode;
     MUX.DispatcherTimer? _repositionTimer;
 
     // Context menu
     WinControls.MenuFlyout? _contextMenu;
-
-    // PopupWindow reference
-    PopupWindow? _popupWindow;
 
     // Event raised when user requests widget mode switch
     public event Action<int>? WidgetModeChangeRequested;
@@ -71,15 +71,28 @@ public class WidgetWindow
         _settingsService = settingsService;
     }
 
-    public void SetPopupWindow(PopupWindow popup) => _popupWindow = popup;
-
     public void Show()
     {
         // 모드 결정: 저장된 설정 기반, Win10이면 항상 Floating
         int savedMode = _settingsService?.WidgetMode ?? 0;
         bool canDeskband = IsWindows11OrLater();
-        _isFloatingMode = (savedMode == 1) || !canDeskband;
-        _isDeskbandMode = !_isFloatingMode && canDeskband;
+
+        _isDeskbandMode = false;
+        _isFloatingMode = false;
+        _isHorizontalFloatingMode = false;
+
+        switch (savedMode)
+        {
+            case 0 when canDeskband:
+                _isDeskbandMode = true;
+                break;
+            case 2:
+                _isHorizontalFloatingMode = true;
+                break;
+            default: // mode 1, or mode 0 on Win10
+                _isFloatingMode = true;
+                break;
+        }
         _isDarkTaskbar = IsTaskbarDarkTheme();
 
         _window = new MUX.Window();
@@ -99,23 +112,34 @@ public class WidgetWindow
 
         // Hide from Alt+Tab & taskbar
         _appWindow.IsShownInSwitchers = false;
-        int exStyle = GetWindowLong(_hwnd, GWL_EXSTYLE);
-        SetWindowLong(_hwnd, GWL_EXSTYLE, exStyle | WS_EX_TOOLWINDOW);
+        // int style = GetWindowLong(_hwnd, GWL_STYLE);
+        // style &= ~(WS_CAPTION | WS_THICKFRAME);
+        // SetWindowLong(_hwnd, GWL_STYLE, style);
 
         _window.SystemBackdrop = new MUX.Media.MicaBackdrop();
-
-        // Hide window border
-        int borderColor = unchecked((int)0xFFFFFFFE); // DWMWA_COLOR_NONE
-        DwmSetWindowAttribute(_hwnd, DWMWA_BORDER_COLOR, ref borderColor, sizeof(int));
-
         // Build UI
         _contentRoot = BuildContent();
         _window.Content = _contentRoot;
-        _window.Activate();
 
-        if (_isFloatingMode)
+
+        if (IsAnyFloatingMode)
         {
-            PositionAsFloating();
+            // Win32 스타일에서도 캡션/두꺼운 프레임 제거
+            int style = GetWindowLong(_hwnd, GWL_STYLE);
+            style &= ~(WS_CAPTION | WS_THICKFRAME);
+            SetWindowLong(_hwnd, GWL_STYLE, style);
+            SetWindowPos(_hwnd, IntPtr.Zero, 0, 0, 0, 0,
+                SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+
+            // Fluent 라운드 코너 (8px) - Windows 11+
+            int cornerPref = DWMWCP_ROUND; // 라운드 코너
+            DwmSetWindowAttribute(_hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, ref cornerPref, sizeof(int));
+
+            if (_isHorizontalFloatingMode)
+                PositionAsHorizontalFloating();
+            else
+                PositionAsFloating();
+
             SetupFloatingDrag();
         }
         else if (_isDeskbandMode)
@@ -134,6 +158,7 @@ public class WidgetWindow
             _contentRoot.Tapped += OnWidgetTapped;
             _contentRoot.RightTapped += OnWidgetRightTapped;
         }
+        _window.Activate();
     }
 
     public void Close()
@@ -266,7 +291,7 @@ public class WidgetWindow
             presenter.IsResizable = false;
         }
 
-        int widgetWidth  = 60;
+        int widgetWidth = 60;
         int widgetHeight = 160;
 
         int x = _settingsService?.FloatingWidgetX ?? -1;
@@ -275,6 +300,32 @@ public class WidgetWindow
         if (x < 0 || y < 0)
         {
             // 저장된 위치 없으면 우측 상단 기본값
+            var displayArea = DisplayArea.GetFromWindowId(
+                _appWindow!.Id, DisplayAreaFallback.Primary);
+            var workArea = displayArea.WorkArea;
+            x = workArea.X + workArea.Width - widgetWidth - 12;
+            y = workArea.Y + 12;
+        }
+
+        _appWindow!.MoveAndResize(new RectInt32(x, y, widgetWidth, widgetHeight));
+    }
+
+    void PositionAsHorizontalFloating()
+    {
+        if (_appWindow?.Presenter is OverlappedPresenter presenter)
+        {
+            presenter.IsAlwaysOnTop = true;
+            presenter.IsResizable = false;
+        }
+
+        int widgetWidth = 240;
+        int widgetHeight = 48;
+
+        int x = _settingsService?.HFloatingWidgetX ?? -1;
+        int y = _settingsService?.HFloatingWidgetY ?? -1;
+
+        if (x < 0 || y < 0)
+        {
             var displayArea = DisplayArea.GetFromWindowId(
                 _appWindow!.Id, DisplayAreaFallback.Primary);
             var workArea = displayArea.WorkArea;
@@ -307,8 +358,16 @@ public class WidgetWindow
             if (_appWindow is not null && _settingsService is not null)
             {
                 var pos = _appWindow.Position;
-                _settingsService.FloatingWidgetX = pos.X;
-                _settingsService.FloatingWidgetY = pos.Y;
+                if (_isHorizontalFloatingMode)
+                {
+                    _settingsService.HFloatingWidgetX = pos.X;
+                    _settingsService.HFloatingWidgetY = pos.Y;
+                }
+                else
+                {
+                    _settingsService.FloatingWidgetX = pos.X;
+                    _settingsService.FloatingWidgetY = pos.Y;
+                }
             }
         };
     }
@@ -331,7 +390,9 @@ public class WidgetWindow
 
     MUX.UIElement BuildContent()
     {
-        return _isFloatingMode ? BuildFloatingContent() : BuildDeskbandContent();
+        if (_isFloatingMode) return BuildFloatingContent();
+        if (_isHorizontalFloatingMode) return BuildHorizontalFloatingContent();
+        return BuildDeskbandContent();
     }
 
     /// <summary>
@@ -357,11 +418,7 @@ public class WidgetWindow
             HorizontalAlignment = MUX.HorizontalAlignment.Center,
             Padding = new MUX.Thickness(8, 10, 8, 10),
             Spacing = 5,
-            Background = new WinMedia.SolidColorBrush(bgColor),
-            CornerRadius = new MUX.CornerRadius(22),
-            BorderBrush = new WinMedia.SolidColorBrush(
-                dark ? ColorHelper.FromArgb(255, 51, 51, 51) : ColorHelper.FromArgb(255, 232, 230, 225)),
-            BorderThickness = new MUX.Thickness(1),
+            Background = new WinMedia.SolidColorBrush(bgColor)
         };
 
         // Brand icon
@@ -447,6 +504,125 @@ public class WidgetWindow
         // Hidden provider text (used by UpdateUI but not displayed in floating capsule)
         _providerText = new WinControls.TextBlock { Visibility = MUX.Visibility.Collapsed };
         root.Children.Add(_providerText);
+
+        return root;
+    }
+
+    /// <summary>
+    /// Horizontal floating mode: 가로 캡슐 위젯 (240×48)
+    /// Copilot: [BrandIcon 18px] [Donut 20px] [62%] [9d]
+    /// Claude:  [BrandIcon 18px] [S] [Donut 18px] [25%] · [W] [Donut 18px] [95%]
+    /// </summary>
+    MUX.UIElement BuildHorizontalFloatingContent()
+    {
+        bool dark = IsSystemDarkTheme();
+
+        var bgColor = dark
+            ? ColorHelper.FromArgb(220, 28, 28, 28)
+            : ColorHelper.FromArgb(220, 250, 250, 250);
+
+        var textColor = dark
+            ? Microsoft.UI.Colors.White
+            : ColorHelper.FromArgb(255, 30, 30, 30);
+
+        var dimTextColor = dark
+            ? ColorHelper.FromArgb(180, 255, 255, 255)
+            : ColorHelper.FromArgb(180, 30, 30, 30);
+
+        var root = new WinControls.StackPanel
+        {
+            Orientation = WinControls.Orientation.Horizontal,
+            Background = new WinMedia.SolidColorBrush(bgColor),
+            Padding = new MUX.Thickness(10, 6, 10, 6),
+            VerticalAlignment = MUX.VerticalAlignment.Center,
+            Spacing = 6,
+        };
+
+        // Brand icon
+        _iconImage = new WinControls.Image
+        {
+            Width = 18,
+            Height = 18,
+            VerticalAlignment = MUX.VerticalAlignment.Center,
+        };
+        root.Children.Add(_iconImage);
+
+        // ── Session column (Claude only, hidden by default) ──
+        _sessionLabel = new WinControls.TextBlock
+        {
+            Text = "S",
+            FontSize = 9,
+            Foreground = new WinMedia.SolidColorBrush(dimTextColor),
+            VerticalAlignment = MUX.VerticalAlignment.Center,
+        };
+        _sessionDonutImage = new WinControls.Image
+        {
+            Width = 18,
+            Height = 18,
+            VerticalAlignment = MUX.VerticalAlignment.Center,
+        };
+        _sessionPercentText = new WinControls.TextBlock
+        {
+            FontSize = 11,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            VerticalAlignment = MUX.VerticalAlignment.Center,
+        };
+
+        // Dot separator
+        var dotSep = new MUX.Shapes.Ellipse
+        {
+            Width = 3,
+            Height = 3,
+            Fill = new WinMedia.SolidColorBrush(dimTextColor),
+            VerticalAlignment = MUX.VerticalAlignment.Center,
+        };
+
+        _sessionColumn = new WinControls.StackPanel
+        {
+            Orientation = WinControls.Orientation.Horizontal,
+            Spacing = 4,
+            VerticalAlignment = MUX.VerticalAlignment.Center,
+            Visibility = MUX.Visibility.Collapsed,
+            Children = { _sessionLabel, _sessionDonutImage, _sessionPercentText, dotSep },
+        };
+        root.Children.Add(_sessionColumn);
+
+        // ── Main donut (weekly/total) ──
+        // Weekly label (W) for Claude, hidden for Copilot
+        var weeklyLabel = new WinControls.TextBlock
+        {
+            Text = "W",
+            FontSize = 9,
+            Foreground = new WinMedia.SolidColorBrush(dimTextColor),
+            VerticalAlignment = MUX.VerticalAlignment.Center,
+            Visibility = MUX.Visibility.Collapsed,
+        };
+        _providerText = weeklyLabel;
+
+        _donutImage = new WinControls.Image
+        {
+            Width = 20,
+            Height = 20,
+            VerticalAlignment = MUX.VerticalAlignment.Center,
+        };
+        _percentText = new WinControls.TextBlock
+        {
+            FontSize = 11,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = new WinMedia.SolidColorBrush(textColor),
+            VerticalAlignment = MUX.VerticalAlignment.Center,
+        };
+        _resetText = new WinControls.TextBlock
+        {
+            FontSize = 9,
+            Foreground = new WinMedia.SolidColorBrush(dimTextColor),
+            VerticalAlignment = MUX.VerticalAlignment.Center,
+        };
+
+        root.Children.Add(weeklyLabel);
+        root.Children.Add(_donutImage);
+        root.Children.Add(_percentText);
+        root.Children.Add(_resetText);
 
         return root;
     }
@@ -577,19 +753,15 @@ public class WidgetWindow
     {
         _contextMenu = new WinControls.MenuFlyout();
 
-        // 현재 데이터로 사용률 가져오기
-        var popupData = _widgetService.PopupCurrent;
-        double copilotPct = popupData?.CopilotSummary?.PercentConsumed ?? 0;
-        double claudePct = 0;
-        if (popupData?.ClaudeSnapshot is { } cs)
-            claudePct = Math.Max(cs.SessionWindow?.UsedPercent ?? 0, cs.WeeklyWindow?.UsedPercent ?? 0);
-
-        bool isCopilotActive = _widgetService.Current?.ProviderName == "Copilot";
+        // 현재 위젯 데이터에서 사용률 가져오기
+        var current = _widgetService.Current;
+        double currentPct = current?.UsedPercent ?? 0;
+        bool isCopilotActive = current?.ProviderName == "Copilot";
 
         // ── Copilot (flat, no submenu) ──
         var copilotItem = new WinControls.MenuFlyoutItem
         {
-            Text = isCopilotActive ? "  Copilot  ✓" : $"  Copilot       {copilotPct:F0}%",
+            Text = isCopilotActive ? "  Copilot  ✓" : "  Copilot",
         };
         _ = SetMenuItemIconAsync(copilotItem, "providericon_copilot.svg");
         copilotItem.Click += (_, _) => SwitchProvider("/ai/githubcopilot");
@@ -598,7 +770,7 @@ public class WidgetWindow
         // ── Claude (flat, no submenu) ──
         var claudeItem = new WinControls.MenuFlyoutItem
         {
-            Text = !isCopilotActive ? "  Claude  ✓" : $"  Claude       {claudePct:F0}%",
+            Text = !isCopilotActive ? "  Claude  ✓" : "  Claude",
         };
         _ = SetMenuItemIconAsync(claudeItem, "providericon_claude.svg");
         claudeItem.Click += (_, _) => SwitchProvider("/ai/claude");
@@ -637,11 +809,19 @@ public class WidgetWindow
 
         var floatingToggle = new WinControls.ToggleMenuFlyoutItem
         {
-            Text = "Floating Widget",
+            Text = "Floating (Vertical)",
             IsChecked = _isFloatingMode,
         };
         floatingToggle.Click += (_, _) => RequestModeSwitch(1);
         widgetModeSubMenu.Items.Add(floatingToggle);
+
+        var hFloatingToggle = new WinControls.ToggleMenuFlyoutItem
+        {
+            Text = "Floating (Horizontal)",
+            IsChecked = _isHorizontalFloatingMode,
+        };
+        hFloatingToggle.Click += (_, _) => RequestModeSwitch(2);
+        widgetModeSubMenu.Items.Add(hFloatingToggle);
 
         _contextMenu.Items.Add(widgetModeSubMenu);
 
@@ -685,13 +865,22 @@ public class WidgetWindow
     {
         try
         {
-            if (!_svgCache.TryGetValue(svgFileName, out var svgBytes))
+            string cacheKey = $"tinted_{svgFileName}";
+
+            if (!_svgCache.TryGetValue(cacheKey, out var svgBytes))
             {
-                using var stream = await Microsoft.Maui.Storage.FileSystem.OpenAppPackageFileAsync(svgFileName);
+                using var stream = await FileSystem.OpenAppPackageFileAsync(svgFileName);
                 using var reader = new StreamReader(stream);
                 var svgContent = await reader.ReadToEndAsync();
+
+                svgContent = System.Text.RegularExpressions.Regex.Replace(
+                    svgContent, @"fill=""[^""]*""", @"fill=""#676780""");
+                svgContent = System.Text.RegularExpressions.Regex.Replace(
+                    svgContent, @"fill:[^;""]+", "fill:#676780");
+
+
                 svgBytes = System.Text.Encoding.UTF8.GetBytes(svgContent);
-                _svgCache[svgFileName] = svgBytes;
+                _svgCache[cacheKey] = svgBytes;
             }
 
             _window?.DispatcherQueue?.TryEnqueue(async () =>
@@ -743,9 +932,9 @@ public class WidgetWindow
         var color = DonutRenderer.GetStatusWinColor(data.UsedPercent);
         var brush = new WinMedia.SolidColorBrush(color);
 
-        if (_isDeskbandMode)
+        if (_isDeskbandMode || _isHorizontalFloatingMode)
         {
-            // ── Deskband 모드 ──
+            // ── Deskband / Horizontal Floating 모드 ──
             _resetText!.Text = ShortenResetText(data.ResetTimeText);
 
             bool isClaude = data.SessionUsedPercent.HasValue;
@@ -871,7 +1060,7 @@ public class WidgetWindow
     {
         try
         {
-            string cacheKey = _isDeskbandMode ? $"tinted_{fileName}" : fileName;
+            string cacheKey = $"tinted_{fileName}";
 
             if (!_svgCache.TryGetValue(cacheKey, out var svgBytes))
             {
@@ -879,13 +1068,11 @@ public class WidgetWindow
                 using var reader = new StreamReader(stream);
                 var svgContent = await reader.ReadToEndAsync();
 
-                if (_isDeskbandMode)
-                {
-                    svgContent = System.Text.RegularExpressions.Regex.Replace(
-                        svgContent, @"fill=""[^""]*""", @"fill=""#676780""");
-                    svgContent = System.Text.RegularExpressions.Regex.Replace(
-                        svgContent, @"fill:[^;""]+", "fill:#676780");
-                }
+                svgContent = System.Text.RegularExpressions.Regex.Replace(
+                    svgContent, @"fill=""[^""]*""", @"fill=""#676780""");
+                svgContent = System.Text.RegularExpressions.Regex.Replace(
+                    svgContent, @"fill:[^;""]+", "fill:#676780");
+
 
                 svgBytes = System.Text.Encoding.UTF8.GetBytes(svgContent);
                 _svgCache[cacheKey] = svgBytes;
@@ -912,10 +1099,7 @@ public class WidgetWindow
 
     void OnWidgetTapped(object sender, TappedRoutedEventArgs e)
     {
-        if (_popupWindow is not null)
-            _popupWindow.Toggle();
-        else
-            _mainWindowService?.Toggle();
+        _mainWindowService?.Toggle();
     }
 
     void OnWidgetRightTapped(object sender, RightTappedRoutedEventArgs e)
@@ -967,14 +1151,12 @@ public class WidgetWindow
     const uint SWP_NOZORDER = 0x0004;
     const uint SWP_NOACTIVATE = 0x0010;
     const uint SWP_FRAMECHANGED = 0x0020;
-    const uint WM_NCHITTEST    = 0x0084;
+    const uint WM_NCHITTEST = 0x0084;
     const uint WM_EXITSIZEMOVE = 0x0232;
-    const int  HTCAPTION       = 2;
-
+    const int HTCAPTION = 2;
+    const uint SWP_NOSIZE = 0x0001;
     [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr hWnd, int nIndex);
     [DllImport("user32.dll")] static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
-    [DllImport("user32.dll")] static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
-    [DllImport("user32.dll")] static extern IntPtr CallWindowProc(IntPtr lpPrevWndFunc, IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr FindWindow(string? lpClassName, string? lpWindowName);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr FindWindowEx(IntPtr hWndParent, IntPtr hWndChildAfter, string? lpszClass, string? lpszWindow);
     [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
@@ -984,7 +1166,10 @@ public class WidgetWindow
     [DllImport("gdi32.dll")] static extern IntPtr CreateRoundRectRgn(int x1, int y1, int x2, int y2, int cx, int cy);
     [DllImport("user32.dll")] static extern int SetWindowRgn(IntPtr hWnd, IntPtr hRgn, bool bRedraw);
     [DllImport("user32.dll")] static extern uint GetDpiForWindow(IntPtr hwnd);
-    const int DWMWA_BORDER_COLOR = 34;
+    const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+    const int DWMWCP_ROUND = 2; // 22px 라운드
+    const int WS_CAPTION = 0x00C00000;
+    const int WS_THICKFRAME = 0x00040000;
     [DllImport("dwmapi.dll", PreserveSig = true)]
     static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int pvAttribute, int cbAttribute);
 

@@ -1,6 +1,7 @@
 using copilot_usage_maui.Features.GithubCopilot.Components;
 using copilot_usage_maui.Services;
 using MauiReactor.Parameters;
+using MauiReactor.Shapes;
 using ReactorRouter.Components;
 using ReactorRouter.Navigation;
 
@@ -35,49 +36,88 @@ partial class MainLayout : Component
     public override VisualNode Render()
     {
         var isPinned = _providersParam.Value.IsPinned;
+        var providers = _providersParam.Value.Providers;
 
         return ContentView(
+            Grid(
+                // Header: 탭 버튼 + 핀 버튼
                 Grid(
-                    Grid(
-                        HStack(_providersParam.Value.Providers.Select(provider => ProviderItem(provider)))
-                            .Padding(10)
-                            .Spacing(10),
+                    HStack(
+                        providers.Select(p => TabButton(p))
+                    )
+                    .Spacing(5)
+                    .Padding(12, 10),
 
+                    HStack(
+                        // Settings 기어 아이콘
+                        Button("⚙")
+                            .OnClicked(() => NavigationService.Instance.NavigateTo("/settings"))
+                            .BackgroundColor(Colors.Transparent)
+                            .TextColor(AppColors.PopupText3)
+                            .FontSize(13)
+                            .WidthRequest(28)
+                            .HeightRequest(28),
+
+                        // 핀 버튼
                         Button(isPinned ? "📌" : "📍")
                             .OnClicked(TogglePin)
-                            .BackgroundColor(Colors.Transparent)
-                            .TextColor(isPinned ? AppColors.Accent : AppColors.TextSecondary)
-                            .WidthRequest(44)
-                            .HeightRequest(44)
-                            .GridColumn(1)
-                            .VCenter()
-                            .Margin(0, 0, 10, 0)
+                            .BackgroundColor(isPinned ? Color.FromArgb("#E6F1FB") : Colors.Transparent)
+                            .TextColor(isPinned ? Color.FromArgb("#185FA5") : AppColors.PopupText3)
+                            .FontSize(11)
+                            .WidthRequest(28)
+                            .HeightRequest(28)
                     )
-                    .Columns("*, Auto")
-                    .Height(100),
-
-                    Divider()
-                        .Margin(10, 10, 10, 20)
-                        .GridRow(1),
-
-                    new Outlet()
-                        .GridRow(2),
-
-                    Divider()
-                        .Margin(10, 10, 10, 20)
-                        .GridRow(3),
-
-                    Label("Settings")
-                        .OnTapped(() => NavigationService.Instance.NavigateTo("/settings"))
-                        .BackgroundColor(Colors.Transparent)
-                        .TextColor(AppColors.TextSecondary)
-                        .HeightRequest(44)
-                        .GridRow(4)
-                        .HCenter()
+                    .Spacing(4)
+                    .GridColumn(1)
+                    .VCenter()
+                    .Margin(0, 0, 10, 0)
                 )
-            .Rows("auto, auto, *, auto, auto")
-        );
+                .Columns("*, Auto"),
 
+                // 콘텐츠 영역
+                new Outlet()
+                    .GridRow(1)
+            )
+            .Rows("Auto, *")
+        )
+        .BackgroundColor(AppColors.PopupPage);
+    }
+
+    VisualNode TabButton(ProviderState provider)
+    {
+        Color bgColor;
+        Color textColor;
+
+        if (provider.IsSelected)
+        {
+            bgColor = provider.Name == "Copilot" ? AppColors.CopilotPrimary : AppColors.ClaudePrimary;
+            textColor = Colors.White;
+        }
+        else
+        {
+            bgColor = Colors.Transparent;
+            textColor = AppColors.PopupText3;
+        }
+
+        return Border(
+                    HStack(
+                        Label(provider.Name)
+                            .TextColor(textColor)
+                            .FontSize(11)
+                            .FontAttributes(MauiControls.FontAttributes.Bold),
+                        new SvgIcon()
+                            .FileName(provider.Icon)
+                            .Size(16)
+                            .TintColor(textColor)
+                    )
+                    .Spacing(3)
+                    .InputTransparent(true)
+                )
+            .OnTapped(() => NavigationService.Instance.NavigateTo(provider.Url))
+            .BackgroundColor(bgColor)
+            .Padding(12, 6)
+            .StrokeThickness(0)
+            .StrokeShape(RoundRectangle().CornerRadius(8));
     }
 
     void TogglePin()
@@ -87,34 +127,4 @@ partial class MainLayout : Component
 #endif
         _providersParam.Set(s => s.IsPinned = !s.IsPinned);
     }
-
-    public bool IsLightTheme => MauiControls.Application.Current?.RequestedTheme == AppTheme.Light;
-
-    private Border Divider()
-        => Border()
-            .Stroke(IsLightTheme ? AppColors.CopyButtonBg : Colors.White)
-            .HFill()
-            .Height(1);
-
-    private VisualNode ProviderItem(ProviderState provider)
-        => Border(
-                VStack(
-                    new SvgIcon()
-                        .FileName($"{provider.Icon}")
-                        .Size(30f)
-                        .TintColor(Color.FromArgb("#676780")),
-                    Label(provider.Name)
-                        .TextColor(provider.IsSelected ? Colors.White : AppColors.TextSecondary)
-                )
-                .InputTransparent(true)
-           )
-           .OnTapped(() =>
-           {
-               NavigationService.Instance.NavigateTo(provider.Url);
-           })
-           .Padding(10)
-           .StrokeCornerRadius(5)
-           .Stroke(Colors.Transparent)
-           .BackgroundColor(provider.IsSelected ? IsLightTheme ? Color.FromArgb("#66BB6A") : AppColors.StatusSuccess : Colors.Transparent);
 }
-

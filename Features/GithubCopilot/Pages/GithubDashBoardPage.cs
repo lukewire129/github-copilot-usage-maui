@@ -1,7 +1,11 @@
+using copilot_usage_maui.Features.GithubCopilot.Components;
+using copilot_usage_maui.Helpers;
 using copilot_usage_maui.Models;
 using copilot_usage_maui.Services;
 using copilot_usage_maui.Shared.Layouts;
 using MauiReactor.Parameters;
+using SkiaSharp;
+using SkiaSharp.Views.Maui;
 
 #if WINDOWS
 using System.Runtime.InteropServices;
@@ -20,6 +24,7 @@ class GithubDashBoardPageState
     public string? AuthDeviceCode { get; set; }
     public bool ShowAuthPanel { get; set; }
     public int AutoRefreshIntervalMs { get; set; }
+    public bool ShowAllModels { get; set; }
 }
 
 partial class GithubDashBoardPage : Component<GithubDashBoardPageState>
@@ -79,39 +84,54 @@ partial class GithubDashBoardPage : Component<GithubDashBoardPageState>
 
     [Param] IParameter<MainLayoutState> _providerStateParam;
 
+    static readonly Color[] ModelColors = new[]
+    {
+        Color.FromArgb("#7F77DD"),
+        Color.FromArgb("#5DCAA5"),
+        Color.FromArgb("#D85A30"),
+        Color.FromArgb("#EF9F27"),
+        Color.FromArgb("#D4537E"),
+        Color.FromArgb("#378ADD"),
+    };
+
+    bool IsDark => MauiControls.Application.Current?.RequestedTheme == AppTheme.Dark;
+
+    bool _initialized = false;
     protected override async void OnMounted()
     {
-        base.OnMounted();
-        _providerStateParam.Set(p =>
+        SettingsService.SetAutoRefreshInterval(OnAutoRefreshIntervalChanged);
+        _widgetService.SetRefreshHandler(OnWidgetRefreshRequested);
+        if (!_initialized)
         {
-            p.Providers = p.Providers
-            .Select(x => new ProviderState
+            _providerStateParam.Set(p =>
             {
-                Name = x.Name,
-                Icon = x.Icon,
-                Url = x.Url,
-                IsSelected = x.Url == "/ai/githubcopilot"
-            })
-            .ToArray();
-        });
+                p.Providers = p.Providers
+                    .Select(x => new ProviderState
+                    {
+                        Name = x.Name,
+                        Icon = x.Icon,
+                        Url = x.Url,
+                        IsSelected = x.Url == "/ai/githubcopilot"
+                    })
+                    .ToArray();
+            });
+            _initialized = true;
+        }
 
         SetState(s => s.AutoRefreshIntervalMs = SettingsService.GetAutoRefreshIntervalMs(_settingsService.AutoRefreshInterval));
-        SettingsService.AutoRefreshIntervalChanged += OnAutoRefreshIntervalChanged;
-        _widgetService.RefreshRequested += OnWidgetRefreshRequested;
         await LoadData();
     }
 
     protected override void OnWillUnmount()
     {
-        SettingsService.AutoRefreshIntervalChanged -= OnAutoRefreshIntervalChanged;
-        _widgetService.RefreshRequested -= OnWidgetRefreshRequested;
-        base.OnWillUnmount();
+        SettingsService.SetAutoRefreshInterval(null);
+        _widgetService.SetRefreshHandler(null);
     }
 
-    async Task OnWidgetRefreshRequested() => await LoadData();
+    async Task OnWidgetRefreshRequested() => await LoadData(forceRefresh: true);
 
-    void OnAutoRefreshIntervalChanged(object? sender, EventArgs e)
-        => SetState(s => s.AutoRefreshIntervalMs = SettingsService.GetAutoRefreshIntervalMs(_settingsService.AutoRefreshInterval));
+    void OnAutoRefreshIntervalChanged(int intervalMs)
+        => SetState(s => s.AutoRefreshIntervalMs = intervalMs);
 
     async Task RunAuthRefresh()
     {
@@ -142,17 +162,13 @@ partial class GithubDashBoardPage : Component<GithubDashBoardPageState>
         }
     }
 
-    async Task LoadData()
+    async Task LoadData(bool forceRefresh = false)
     {
-        SetState(s =>
-        {
-            s.IsLoading = true;
-            s.Error = null;
-        });
+        SetState(s => { s.IsLoading = true; s.Error = null; });
 
         try
         {
-            var summary = await _gitHubCopilotService.GetUsageSummaryAsync(_settingsService.MonthsHistory);
+            var summary = await _gitHubCopilotService.GetUsageSummaryAsync(_settingsService.MonthsHistory, forceRefresh);
             SetState(s =>
             {
                 s.Summary = summary;
@@ -161,7 +177,6 @@ partial class GithubDashBoardPage : Component<GithubDashBoardPageState>
                 s.Error = null;
             });
 
-            // 위젯 업데이트
             _widgetService.Update(new WidgetData
             {
                 ProviderName = "Copilot",
@@ -169,285 +184,284 @@ partial class GithubDashBoardPage : Component<GithubDashBoardPageState>
                 UsedPercent = summary.PercentConsumed,
                 ResetTimeText = AppStrings.StatusBarDaysLeft(summary.DaysRemaining)
             });
-
-            // 팝업 데이터 업데이트
-            _widgetService.UpdateCopilotPopup(summary);
         }
         catch (Exception ex)
         {
-            SetState(s =>
-            {
-                s.Error = ex.Message;
-                s.IsLoading = false;
-            });
+            SetState(s => { s.Error = ex.Message; s.IsLoading = false; });
         }
     }
 
     public override VisualNode Render()
-        => ScrollView(
-                Grid("auto,auto,*", "*",
-                    // Header
-                    Grid("Auto", "*, Auto",
-                        VStack(
-                            Label("GitHub Copilot")
-                                .FontSize(20)
-                                .FontAttributes(MauiControls.FontAttributes.Bold),
-                            Label(DateTime.Today.ToString(AppStrings.DateFormat))
-                                .FontSize(12)
-                                .TextColor(AppColors.TextSecondary)
-                        ).Spacing(2),
-                        Button("🔑")
-                            .OnClicked(() => SetState(s => { s.ShowAuthPanel = !s.ShowAuthPanel; s.AuthRefreshOutput = null; }))
-                            .BackgroundColor(Colors.Transparent)
-                            .TextColor(State.ShowAuthPanel ? AppColors.Accent : AppColors.TextSecondary)
-                            .WidthRequest(45)
-                            .HeightRequest(44)
-                            .GridColumn(1)
-                            .VCenter()
-                    ),
-                    State.ShowAuthPanel ? Grid(RenderAuthPanel()).GridRow(1) : new Label().HeightRequest(0).GridRow(1),
-                    Timer()
-                       .IsEnabled(!State.IsLoading
-                                && State.AutoRefreshIntervalMs > 0)
-                        .Interval(10_000)
-                        .OnTick(() =>
-                        {
-                            if (DateTime.Now - State.LastRefreshed >= TimeSpan.FromMilliseconds(State.AutoRefreshIntervalMs))
-                                _ = LoadData();
-                        }),
-                    Grid(
-                        RenderBody()   // ← 항상 렌더링
-                    )
-                    .GridRow(2)
+        => Grid(
+            Timer()
+                .IsEnabled(!State.IsLoading && State.AutoRefreshIntervalMs > 0)
+                .Interval(10_000)
+                .OnTick(() =>
+                {
+                    if (DateTime.Now - State.LastRefreshed >= TimeSpan.FromMilliseconds(State.AutoRefreshIntervalMs))
+                        _ = LoadData(forceRefresh: true);
+                }),
+            ScrollView(
+                VStack(
+                    RenderBody()
                 )
-                .RowSpacing(20)
-                .Padding(24, 20)
-            );
-
-    VisualNode RenderAuthPanel()
-        => Border(
-            VStack(
-                Grid("Auto", "*, Auto",
-                    Label("gh auth refresh").FontSize(14).FontAttributes(MauiControls.FontAttributes.Bold).VCenter(),
-                    State.IsRefreshingAuth
-                        ? (VisualNode)ActivityIndicator().IsRunning(true).GridColumn(1).VCenter()
-                        : Button(AppStrings.Run)
-                            .OnClicked(async () => await RunAuthRefresh())
-                            .BackgroundColor(AppColors.Accent)
-                            .TextColor(AppColors.TextOnAccent)
-                            .GridColumn(1)
-                            .WidthRequest(60)
-                ),
-                State.AuthRefreshOutput != null
-                    ? VStack(
-                        Label(State.AuthRefreshOutput)
-                            .FontSize(12)
-                            .TextColor(AppColors.TextOutput),
-                        State.AuthDeviceCode != null
-                            ? VStack(
-                                Label(AppStrings.AuthCodeLabel)
-                                    .FontSize(11)
-                                    .TextColor(AppColors.TextSecondary),
-                                HStack(
-                                    Label(State.AuthDeviceCode)
-                                        .FontSize(24)
-                                        .FontAttributes(MauiControls.FontAttributes.Bold)
-                                        .VCenter(),
-                                    Button(AppStrings.Copy)
-                                        .OnClicked(() =>
-                                        {
-                                            var code = State.AuthDeviceCode;
-                                            if (code != null) CopyToClipboard(code);
-                                        })
-                                        .BackgroundColor(AppColors.CopyButtonBg)
-                                        .TextColor(AppColors.CopyButtonText)
-                                        .WidthRequest(60),
-                                    Button(AppStrings.OpenBrowser)
-                                        .OnClicked(async () => await Launcher.Default.OpenAsync("https://github.com/login/device"))
-                                        .BackgroundColor(AppColors.Accent)
-                                        .TextColor(AppColors.TextOnAccent)
-                                ).Spacing(8)
-                            ).Spacing(4)
-                            : new Label(),
-                        Button(AppStrings.RefreshAfterAuth)
-                            .OnClicked(async () => { SetState(s => s.ShowAuthPanel = false); await LoadData(); })
-                            .BackgroundColor(Colors.Transparent)
-                            .TextColor(AppColors.Accent)
-                            .HStart()
-                    ).Spacing(6)
-                    : new Label()
-            ).Spacing(8).Padding(12, 10)
-        )
-        .BackgroundColor(AppColors.CardBackground)
-        .Stroke(Colors.Transparent)
-        .StrokeThickness(0)
-        .StrokeShape(RoundRectangle());
-
-    static VisualNode SectionCard(VisualNode content)
-        => Border(content)
-            .BackgroundColor(AppColors.CardBackground)
-            .Stroke(AppColors.DividerColor)
-            .StrokeThickness(1)
-            .StrokeShape(RoundRectangle());
+                .Padding(12, 8)
+                .Spacing(8)
+            )
+        );
 
     VisualNode RenderBody()
     {
         if (State.IsLoading && State.Summary == null)
-            return ActivityIndicator()
-                        .IsRunning(true)
-                        .Center();
+            return ActivityIndicator().IsRunning(true).Center();
 
         if (State.Error != null)
-            return SectionCard(
+            return PopupCard(
                 VStack(
-                    HStack(
-                        Label(AppStrings.LastRefreshed(State.LastRefreshed))
-                            .FontSize(11)
-                            .VCenter()
-                            .TextColor(AppColors.TextSecondary),
-                        Button("⟳")
-                            .OnClicked(async () => await LoadData())
-                            .BackgroundColor(Colors.Transparent)
-                            .TextColor(AppColors.TextSecondary)
-                            .WidthRequest(40)
-                            .HeightRequest(44)
-                    )
-                    .HEnd(),
-                    Label(AppStrings.LoadFailed).FontSize(15).FontAttributes(MauiControls.FontAttributes.Bold).HCenter(),
-                    Label(State.Error).TextColor(AppColors.StatusError).HCenter().HorizontalTextAlignment(TextAlignment.Center).FontSize(13),
-                    Label(AppStrings.AuthHint).FontSize(12).TextColor(AppColors.TextSecondary).HCenter(),
-                    Button(AppStrings.Retry).OnClicked(async () => await LoadData()).HCenter()
-                ).Spacing(10).Padding(16, 14)
+                    Label(AppStrings.LoadFailed)
+                        .FontSize(14).FontAttributes(MauiControls.FontAttributes.Bold)
+                        .TextColor(AppColors.PopupText1).HCenter(),
+                    Label(State.Error)
+                        .TextColor(AppColors.StatusError).HCenter()
+                        .HorizontalTextAlignment(TextAlignment.Center).FontSize(12),
+                    Label(AppStrings.AuthHint)
+                        .FontSize(11).TextColor(AppColors.PopupText3).HCenter(),
+                    Button(AppStrings.Retry)
+                        .OnClicked(async () => await LoadData(forceRefresh: true)).HCenter()
+                ).Spacing(8).Padding(12, 10)
             );
 
         var s = State.Summary!;
-        return VStack(
-            HStack(
-                Label(AppStrings.LastRefreshed(State.LastRefreshed))
-                    .FontSize(11)
-                    .VCenter()
-                    .TextColor(AppColors.TextSecondary),
-                Button("⟳")
-                    .OnClicked(async () => await LoadData())
-                    .BackgroundColor(Colors.Transparent)
-                    .TextColor(AppColors.TextSecondary)
-                    .WidthRequest(40)
-                    .HeightRequest(44)
-            )
-            .HEnd(),
-            SectionCard(RenderUsageCard(s)),
-            SectionCard(RenderModelBreakdown(s))
-        )
-        .Spacing(16)
-        .Opacity(State.IsLoading ? 0.5 : 1.0);
-    }
-
-    static VisualNode RenderUsageCard(UsageSummary s)
-    {
-        var pct = s.PercentConsumed / 100.0;
-        var barColor = s.PercentConsumed >= 90 ? AppColors.StatusError
-            : s.PercentConsumed >= 70 ? AppColors.StatusWarning
-            : AppColors.StatusSuccess;
-
         int totalDays = s.DaysElapsed + s.DaysRemaining;
+        double projected = s.AvgDailyUsage * totalDays;
         double dailyBudget = s.Quota / (double)totalDays;
-        double expectedByToday = dailyBudget * s.DaysElapsed;
-        double paceDiff = expectedByToday - s.MtdUsed;
-        bool isAhead = paceDiff >= 0;
 
         return VStack(
-            Grid("Auto", "*, Auto",
-                Label(AppStrings.MonthlyUsage)
-                    .FontSize(11)
-                    .TextColor(AppColors.TextSecondary)
-                    .VCenter(),
-                s.PlanName.Length > 0
-                    ? Label(s.PlanName)
-                        .FontSize(15)
-                        .TextColor(AppColors.Accent)
-                        .FontAttributes(MauiControls.FontAttributes.Bold)
-                        .GridColumn(1)
-                    : new Label().GridColumn(1)
-            ),
-            Label($"{s.MtdUsed:F0} / {s.Quota} req  ({s.PercentConsumed:F1}%)")
-                .FontSize(24)
-                .FontAttributes(MauiControls.FontAttributes.Bold),
-            ProgressBar()
-                .Progress(Math.Min(1.0, pct))
-                .ProgressColor(barColor)
-                .HeightRequest(8),
+            // 상태 배너
+            RenderStatusBanner(s, projected),
 
-            Grid("Auto,Auto,Auto,Auto,Auto,Auto", "*,*",
-                Label(AppStrings.TodayUsage).FontSize(12).TextColor(AppColors.TextSecondary),
-                Label($"{s.TodayUsed:F0} req")
-                    .FontSize(14).FontAttributes(MauiControls.FontAttributes.Bold).HEnd().GridColumn(1),
+            // Monthly Usage 카드
+            RenderUsageCard(s, dailyBudget),
 
-                Label(AppStrings.Remaining).FontSize(12).TextColor(AppColors.TextSecondary).GridRow(1),
-                Label($"{s.Remaining:F0} req")
-                    .FontSize(14).FontAttributes(MauiControls.FontAttributes.Bold).HEnd().GridColumn(1).GridRow(1),
-
-                Label(AppStrings.DailyBudget).FontSize(12).TextColor(AppColors.TextSecondary).GridRow(2),
-                Label($"{dailyBudget:F1} req/day")
-                    .FontSize(14).FontAttributes(MauiControls.FontAttributes.Bold).HEnd().GridColumn(1).GridRow(2),
-
-                Label(AppStrings.CurrentPace).FontSize(12).TextColor(AppColors.TextSecondary).GridRow(3),
-                Label(isAhead
-                        ? AppStrings.PaceAhead(paceDiff, expectedByToday)
-                        : AppStrings.PaceBehind(-paceDiff, expectedByToday))
-                    .FontSize(14)
-                    .FontAttributes(MauiControls.FontAttributes.Bold)
-                    .TextColor(isAhead ? AppColors.StatusSuccess : AppColors.StatusError)
-                    .HEnd().GridColumn(1).GridRow(3),
-
-                Label(AppStrings.MonthProgress).FontSize(12).TextColor(AppColors.TextSecondary).GridRow(4),
-                Label(AppStrings.DaysProgress(s.DaysElapsed, s.DaysRemaining))
-                    .FontSize(14).FontAttributes(MauiControls.FontAttributes.Bold).HEnd().GridColumn(1).GridRow(4),
-
-                Label(AppStrings.ProjectedEnd).FontSize(12).TextColor(AppColors.TextSecondary).GridRow(5),
-                Label($"{s.AvgDailyUsage * totalDays:F0} req  {(s.ProjectedOverQuota ? AppStrings.OverQuota : AppStrings.UnderQuota)}")
-                    .FontSize(14)
-                    .FontAttributes(MauiControls.FontAttributes.Bold)
-                    .TextColor(s.ProjectedOverQuota ? AppColors.StatusError : AppColors.StatusSuccess)
-                    .HEnd().GridColumn(1).GridRow(5)
+            // Today + Daily Budget 미니 카드
+            Grid(
+                MiniCard(AppStrings.TodayUsage, $"{s.TodayUsed:F2} req"),
+                MiniCard(AppStrings.DailyBudget, $"{dailyBudget:F1} / day").GridColumn(1)
             )
-            .RowSpacing(12),
+            .Columns("*, *")
+            .ColumnSpacing(7),
 
-            s.ProjectedRunOutDate.HasValue
-                ? Label(AppStrings.RunOutDate(s.ProjectedRunOutDate.Value))
-                    .FontSize(13)
-                    .TextColor(s.ProjectedOverQuota ? AppColors.StatusError : AppColors.TextSecondary)
-                : new Label()
-        ).Spacing(12).Padding(16, 14);
+            // Model Usage 카드
+            s.ModelBreakdown.Count > 0 ? RenderModelCard(s) : null
+        ).Spacing(8).Opacity(State.IsLoading ? 0.5 : 1.0);
     }
 
-    static VisualNode RenderModelBreakdown(UsageSummary s)
+    VisualNode RenderStatusBanner(UsageSummary s, double projected)
     {
-        if (s.ModelBreakdown.Count == 0)
-            return Label(AppStrings.NoModelData).TextColor(AppColors.TextSecondary).FontSize(13);
+        var pct = s.PercentConsumed;
+        var bgColor = AppColors.StatusBgForPercent(pct);
+        var dotColor = AppColors.StatusColorForPercent(pct);
+        var textColor = AppColors.StatusTextForPercent(pct);
 
-        var rows = new List<VisualNode>
-        {
-            Label(AppStrings.ModelBreakdown)
-                .FontSize(11)
-                .TextColor(AppColors.TextSecondary)
-        };
+        string title;
+        string sub;
 
-        double total = s.ModelBreakdown.Values.Sum();
-        foreach (var kv in s.ModelBreakdown.OrderByDescending(x => x.Value))
+        if (s.ProjectedOverQuota)
         {
-            double pct = total > 0 ? kv.Value / total * 100 : 0;
-            rows.Add(
-                Grid("Auto", "*, Auto",
-                    Label(kv.Key).FontSize(13).TextColor(AppColors.TextModelName).VCenter(),
-                    Label($"{kv.Value:F0} req ({pct:F0}%)")
-                        .FontSize(14)
-                        .FontAttributes(MauiControls.FontAttributes.Bold)
-                        .GridColumn(1)
-                        .HEnd()
-                )
-            );
+            title = AppStrings.IsKoreanStatic
+                ? $"한도 초과 예상 · {projected:F0} req"
+                : $"Over quota · ~{projected:F0} req projected";
+            sub = AppStrings.IsKoreanStatic
+                ? $"{s.DaysRemaining}일 남음"
+                : $"{s.DaysRemaining}d remaining";
+        }
+        else
+        {
+            title = AppStrings.IsKoreanStatic
+                ? $"한도 이내 · 예상 {projected:F0} req"
+                : $"On track · ~{projected:F0} req projected";
+            sub = AppStrings.IsKoreanStatic
+                ? $"{s.DaysRemaining}일 남음"
+                : $"{s.DaysRemaining}d remaining";
         }
 
-        return VStack([.. rows]).Spacing(10).Padding(16, 14);
+        return Border(
+            HStack(
+                BoxView().WidthRequest(7).HeightRequest(7).CornerRadius(4).Color(dotColor).VStart().Margin(0, 3, 0, 0),
+                VStack(
+                    Label(title).FontSize(12).FontAttributes(MauiControls.FontAttributes.Bold).TextColor(textColor),
+                    Label(sub).FontSize(10).TextColor(textColor)
+                ).Spacing(1)
+            ).Spacing(9).Padding(12, 9)
+        )
+        .BackgroundColor(bgColor)
+        .Stroke(dotColor)
+        .StrokeThickness(1)
+        .StrokeCornerRadius(8);
     }
+
+    VisualNode RenderUsageCard(UsageSummary s, double dailyBudget)
+    {
+        var pct = s.PercentConsumed;
+        var fillColor = AppColors.StatusColorForPercent(pct);
+
+        return PopupCard(
+            VStack(
+                Grid(
+                    Label(AppStrings.MonthlyUsage).FontSize(11).TextColor(AppColors.PopupText3).VCenter(),
+                    s.PlanName.Length > 0
+                        ? Badge(s.PlanName, Color.FromArgb("#EEEDFE"), Color.FromArgb("#3C3489")).GridColumn(1)
+                        : null
+                ).Columns("*, Auto"),
+
+                // 도넛 + 텍스트
+                HStack(
+                    new SkiaCanvas()
+                        .WidthRequest(36).HeightRequest(36)
+                        .OnPaintSurface((sender, e) =>
+                        {
+                            DonutRenderer.DrawOnCanvas(
+                                e.Surface.Canvas,
+                                e.Info.Width, e.Info.Height,
+                                strokeWidth: 4f * (e.Info.Width / 36f),
+                                percent: pct,
+                                trackColor: DonutRenderer.GetTrackColor(IsDark),
+                                fillColor: DonutRenderer.GetStatusColor(pct, IsDark));
+                        }),
+                    VStack(
+                        Label($"{s.MtdUsed:F2}")
+                            .FontSize(22).FontAttributes(MauiControls.FontAttributes.Bold).TextColor(AppColors.PopupText1),
+                        Label($"/ {s.Quota} req · {s.Remaining:F2} {(AppStrings.IsKoreanStatic ? "남음" : "left")}")
+                            .FontSize(10).TextColor(AppColors.PopupText3)
+                    ).Spacing(2)
+                ).Spacing(8)
+            ).Spacing(8).Padding(11, 13)
+        );
+    }
+
+    VisualNode RenderModelCard(UsageSummary s)
+    {
+        var models = s.ModelBreakdown.OrderByDescending(x => x.Value).ToList();
+        double total = models.Sum(m => m.Value);
+        var top3 = models.Take(3).ToList();
+        var rest = models.Skip(3).ToList();
+        double restPct = total > 0 ? rest.Sum(m => m.Value) / total * 100 : 0;
+        double restReq = rest.Sum(m => m.Value);
+
+        return PopupCard(
+            VStack(
+                // Header
+                Grid(
+                    Label(AppStrings.ModelBreakdown).FontSize(12).FontAttributes(MauiControls.FontAttributes.Bold).TextColor(AppColors.PopupText1).VCenter(),
+                    Label($"{models.Count} models").FontSize(10).TextColor(AppColors.PopupText3).VCenter().GridColumn(1)
+                ).Columns("*, Auto"),
+
+                // Stacked bar
+                RenderStackedBar(models, total),
+
+                // Top 3 models
+                VStack(
+                    top3.Select((kv, i) =>
+                    {
+                        double pct = total > 0 ? kv.Value / total * 100 : 0;
+                        var color = ModelColors[i % ModelColors.Length];
+                        return ModelRow(kv.Key, $"{kv.Value:F2} ({pct:F0}%)", color);
+                    })
+                ).Spacing(2),
+
+                // Expandable "others"
+                rest.Count > 0
+                    ? VStack(
+                        Grid(
+                            HStack(
+                                BoxView().WidthRequest(7).HeightRequest(7).CornerRadius(2)
+                                    .Color(AppColors.PopupText3),
+                                Label(State.ShowAllModels
+                                        ? (AppStrings.IsKoreanStatic ? "접기 ▲" : "Collapse ▲")
+                                        : (AppStrings.IsKoreanStatic ? $"기타 {rest.Count}개 ▼" : $"{rest.Count} more ▼"))
+                                    .FontSize(11).TextColor(Color.FromArgb("#185FA5"))
+                            ).Spacing(5).VCenter(),
+                            Label($"{restReq:F2} ({restPct:F0}%)")
+                                .FontSize(11).FontAttributes(MauiControls.FontAttributes.Bold)
+                                .TextColor(AppColors.PopupText1).VCenter().GridColumn(1)
+                        )
+                        .Columns("*, Auto")
+                        .OnTapped(() => SetState(s2 => s2.ShowAllModels = !s2.ShowAllModels)),
+
+                        State.ShowAllModels
+                            ? VStack(
+                                rest.Select((kv, i) =>
+                                {
+                                    double pct = total > 0 ? kv.Value / total * 100 : 0;
+                                    return Grid(
+                                        Label($"  {kv.Key}").FontSize(10).TextColor(AppColors.PopupText3).VCenter(),
+                                        Label($"{kv.Value:F2} ({pct:F0}%)").FontSize(10).TextColor(AppColors.PopupText2).VCenter().GridColumn(1)
+                                    ).Columns("*, Auto");
+                                })
+                            ).Spacing(2)
+                            : null
+                    ).Spacing(4)
+                    : null
+            ).Spacing(6).Padding(11, 13)
+        );
+    }
+
+    VisualNode RenderStackedBar(List<KeyValuePair<string, double>> models, double total)
+    {
+        if (total <= 0) return BoxView().HeightRequest(5);
+
+        var columns = string.Join(",",
+            models.Select((m, i) =>
+            {
+                double pct = m.Value / total * 100;
+                return $"{Math.Max(pct, 1)}*";
+            }));
+
+        var bars = models.Select((m, i) =>
+            BoxView()
+                .Color(i < ModelColors.Length ? ModelColors[i] : AppColors.PopupText3)
+                .HeightRequest(5)
+                .GridColumn(i)
+        );
+
+        return Grid(bars.ToArray())
+            .Columns(columns)
+            .HeightRequest(5);
+    }
+
+    static VisualNode ModelRow(string name, string value, Color dotColor)
+        => Grid(
+            HStack(
+                BoxView().WidthRequest(7).HeightRequest(7).CornerRadius(2).Color(dotColor).VCenter(),
+                Label(name).FontSize(11).TextColor(AppColors.PopupText2).VCenter()
+            ).Spacing(5),
+            Label(value).FontSize(11).FontAttributes(MauiControls.FontAttributes.Bold)
+                .TextColor(AppColors.PopupText1).VCenter().GridColumn(1)
+        ).Columns("*, Auto");
+
+    static Border MiniCard(string label, string value)
+        => Border(
+            VStack(
+                Label(label).FontSize(10).TextColor(AppColors.PopupText3),
+                Label(value).FontSize(16).FontAttributes(MauiControls.FontAttributes.Bold).TextColor(AppColors.PopupText1)
+            ).Spacing(2).Padding(9, 11)
+        )
+        .BackgroundColor(AppColors.PopupSurface)
+        .Stroke(Colors.Transparent)
+        .StrokeCornerRadius(9);
+
+    static Border Badge(string text, Color bg, Color fg)
+        => Border(
+            Label(text).FontSize(10).FontAttributes(MauiControls.FontAttributes.Bold).TextColor(fg)
+                .Padding(8, 2)
+        )
+        .BackgroundColor(bg)
+        .Stroke(Colors.Transparent)
+        .StrokeCornerRadius(5);
+
+    static VisualNode PopupCard(VisualNode content)
+        => Border(content)
+            .BackgroundColor(AppColors.PopupSurface)
+            .Stroke(Colors.Transparent)
+            .StrokeCornerRadius(9);
 }

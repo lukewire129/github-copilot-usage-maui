@@ -1,3 +1,4 @@
+using copilot_usage_maui.Platforms.Windows;
 using copilot_usage_maui.Services;
 using ReactorRouter;
 using ReactorRouter.Routing;
@@ -45,9 +46,12 @@ namespace copilot_usage_maui
             builder.Services.AddSingleton<ClaudeUsageService>();
             builder.Services.AddSingleton<NotificationService>();
             builder.Services.AddSingleton<WidgetService>();
-#if WINDOWS
+
+            builder.Services.AddSingleton<WidgetContextMenuService>();
+
+            builder.Services.AddSingleton<ITrayService, TrayService>();
             builder.Services.AddSingleton<MainWindowService>();
-#endif
+
 
             return builder.Build();
         }

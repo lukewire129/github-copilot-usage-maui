@@ -8,6 +8,7 @@ namespace copilot_usage_maui.Helpers;
 /// </summary>
 static class DonutRenderer
 {
+    static bool IsDark => MauiControls.Application.Current?.RequestedTheme == AppTheme.Dark;
     /// <summary>
     /// 도넛 차트를 SKBitmap으로 렌더링
     /// </summary>
@@ -129,20 +130,20 @@ static class DonutRenderer
     /// <summary>
     /// 사용률에 따른 상태 색상 반환 (60/80 임계값)
     /// </summary>
-    public static SKColor GetStatusColor(double percent, bool isDark = false)
+    public static SKColor GetStatusColor(double percent)
     {
         if (percent >= 80)
-            return isDark ? SKColor.Parse("#F09595") : SKColor.Parse("#E24B4A");
+            return IsDark ? SKColor.Parse("#F09595") : SKColor.Parse("#E24B4A");
         if (percent >= 60)
-            return isDark ? SKColor.Parse("#FAC775") : SKColor.Parse("#EF9F27");
-        return isDark ? SKColor.Parse("#5DCAA5") : SKColor.Parse("#1D9E75");
+            return IsDark ? SKColor.Parse("#FAC775") : SKColor.Parse("#EF9F27");
+        return IsDark ? SKColor.Parse("#5DCAA5") : SKColor.Parse("#1D9E75");
     }
 
     /// <summary>
     /// 도넛 트랙(배경) 색상
     /// </summary>
-    public static SKColor GetTrackColor(bool isDark)
-        => isDark ? SKColor.Parse("#444444") : SKColor.Parse("#E8E6E1");
+    public static SKColor GetTrackColor()
+        => IsDark ? SKColor.Parse("#444444") : SKColor.Parse("#E8E6E1");
 
 #if WINDOWS
     /// <summary>

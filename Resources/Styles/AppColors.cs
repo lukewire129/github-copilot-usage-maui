@@ -41,6 +41,9 @@ static class AppColors
     public static Color PopupText2 => IsDark ? Color.FromArgb("#AAAAAA") : Color.FromArgb("#5F5E5A");
     public static Color PopupText3 => IsDark ? Color.FromArgb("#777777") : Color.FromArgb("#888780");
 
+    // -- TaskBar --
+    public static Color TaskBarBackground => IsDark ? Color.FromArgb("#1E1E1E") : Color.FromArgb("#F0F0F0");
+
     /// <summary>
     /// 사용률에 따른 상태 색상 (60/80 임계값)
     /// </summary>

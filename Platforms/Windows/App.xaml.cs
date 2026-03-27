@@ -1,6 +1,7 @@
 using copilot_usage_maui.Platforms.Windows;
 using copilot_usage_maui.Services;
-using Microsoft.Maui;
+using MauiReactor.Integration;
+using Microsoft.Maui.Platform;
 using Microsoft.Toolkit.Uwp.Notifications;
 using Microsoft.UI.Xaml;
 
@@ -11,12 +12,14 @@ namespace copilot_usage_maui.WinUI
         WidgetWindow? _widgetWindow;
         MainWindowService? _mainWindowService;
         SettingsService? _settingsService;
+        Microsoft.UI.Xaml.Window? _mainWinUI;
+        Microsoft.UI.Windowing.AppWindow? _mainAppWindow;
+        WidgetContextMenuService? _fallbackContextMenuService;
+        WidgetContextMenuService? _trayMenuService;
 
         public App()
         {
-#if WINDOWS
             Environment.SetEnvironmentVariable("MICROSOFT_WINDOWSAPPRUNTIME_BASE_DIRECTORY", AppContext.BaseDirectory);
-#endif
             this.InitializeComponent();
         }
 
@@ -24,7 +27,15 @@ namespace copilot_usage_maui.WinUI
 
         protected override void OnLaunched(LaunchActivatedEventArgs args)
         {
-            base.OnLaunched(args);
+            try
+            {
+                base.OnLaunched(args);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($">>> OnLaunched base FAILED: {ex}");
+                throw;
+            }
 
             // 메인 윈도우 초기화 (타이틀바 제거, 위치 고정, 닫기→숨기기)
             SetupMainWindow();
@@ -37,10 +48,35 @@ namespace copilot_usage_maui.WinUI
                 {
                     var widgetService = IPlatformApplication.Current?.Services.GetService<WidgetService>();
                     _mainWindowService = IPlatformApplication.Current?.Services.GetService<MainWindowService>();
-                    _settingsService   = IPlatformApplication.Current?.Services.GetService<SettingsService>();
+                    _settingsService = IPlatformApplication.Current?.Services.GetService<SettingsService>();
+
+                    _trayMenuService = IPlatformApplication.Current?.Services.GetService<WidgetContextMenuService>();
+                    if (_trayMenuService is not null)
+                        _trayMenuService.WidgetModeChangeRequested += OnWidgetModeChangeRequested;
+
+                    var trayService = IPlatformApplication.Current?.Services.GetService<ITrayService>();
+                    if (trayService is not null)
+                    {
+                        trayService.RightClickHandler = (screenX, screenY) =>
+                        {
+                            // 트레이 우클릭 시 커서 위치 기준으로 메뉴 표시 (UI 쓰레드)
+                            Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread()?.TryEnqueue(() =>
+                            {
+                                if (_mainWinUI?.Content is Microsoft.UI.Xaml.FrameworkElement anchor
+                                    && _mainAppWindow is not null)
+                                {
+                                    var svc = _trayMenuService ?? _fallbackContextMenuService;
+                                    svc?.ShowContextMenuAtScreenPoint(anchor, _mainAppWindow.Position, screenX, screenY);
+                                }
+                            });
+                        };
+                    }
 
                     if (widgetService is not null)
+                    {
+                        widgetService.SetWidgetMode(_settingsService?.WidgetMode ?? 0);
                         CreateAndShowWidget(widgetService);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -62,12 +98,39 @@ namespace copilot_usage_maui.WinUI
 
         void CreateAndShowWidget(WidgetService widgetService)
         {
+            if (_widgetWindow is not null)
+            {
+                _widgetWindow.WidgetModeChangeRequested -= OnWidgetModeChangeRequested;
+            }
             _widgetWindow?.Close();
             _widgetWindow = null;
 
+            if (_fallbackContextMenuService is not null)
+            {
+                _fallbackContextMenuService.WidgetModeChangeRequested -= OnWidgetModeChangeRequested;
+                _fallbackContextMenuService = null;
+            }
+
+            if (widgetService.WidgetType == null)
+            {
+                _fallbackContextMenuService = new WidgetContextMenuService(widgetService, _mainWindowService, _settingsService);
+                _fallbackContextMenuService.WidgetModeChangeRequested += OnWidgetModeChangeRequested;
+                _mainWindowService?.ShowWithAnimation();
+                _mainWindowService?.TogglePin();
+                return;
+            }
+
             _widgetWindow = new WidgetWindow(widgetService, _mainWindowService, _settingsService);
             _widgetWindow.WidgetModeChangeRequested += OnWidgetModeChangeRequested;
-            _widgetWindow.Show();
+            var mauiContext = new MauiContext(this.Services);
+            var nativeView = new MauiControls.ContentPage()
+            {
+                Content = new ComponentHost()
+                {
+                    Component = widgetService.WidgetType
+                },
+            }.ToPlatform(mauiContext);
+            _widgetWindow.Show(nativeView);
 
             if (_mainWindowService is not null)
                 _mainWindowService.WidgetHwnd = _widgetWindow.Hwnd;
@@ -79,7 +142,10 @@ namespace copilot_usage_maui.WinUI
             {
                 var widgetService = IPlatformApplication.Current?.Services.GetService<WidgetService>();
                 if (widgetService is not null)
+                {
+                    widgetService.SetWidgetMode(mode);
                     CreateAndShowWidget(widgetService);
+                }
             });
         }
 
@@ -90,6 +156,10 @@ namespace copilot_usage_maui.WinUI
                 var mainWindow = Microsoft.Maui.Controls.Application.Current?.Windows.FirstOrDefault();
                 if (mainWindow?.Handler?.PlatformView is Microsoft.UI.Xaml.Window mainWinUI)
                 {
+                    _mainWinUI = mainWinUI;
+                    var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(mainWinUI);
+                    var winId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
+                    _mainAppWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(winId);
                     var svc = IPlatformApplication.Current?.Services.GetService<MainWindowService>();
                     svc?.Initialize(mainWinUI);
                 }

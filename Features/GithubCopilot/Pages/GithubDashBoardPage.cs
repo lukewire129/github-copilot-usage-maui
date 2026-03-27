@@ -325,8 +325,8 @@ partial class GithubDashBoardPage : Component<GithubDashBoardPageState>
                                 e.Info.Width, e.Info.Height,
                                 strokeWidth: 4f * (e.Info.Width / 36f),
                                 percent: pct,
-                                trackColor: DonutRenderer.GetTrackColor(IsDark),
-                                fillColor: DonutRenderer.GetStatusColor(pct, IsDark));
+                                trackColor: DonutRenderer.GetTrackColor(),
+                                fillColor: DonutRenderer.GetStatusColor(pct));
                         }),
                     VStack(
                         Label($"{s.MtdUsed:F2}")

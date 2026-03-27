@@ -28,6 +28,11 @@
 		
 		<IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
 	</PropertyGroup>
+	
+	<ItemGroup Condition="$(TargetFramework.Contains('-windows'))">
+		<PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" Version="7.0.1" />
+		<PackageReference Include="PInvoke.User32" Version="0.7.104" />
+	</ItemGroup>
 
 	<ItemGroup><!-- App Icon -->
 		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#512BD4" /><!-- Splash Screen -->
@@ -46,6 +51,17 @@
 		<PackageReference Include="Svg.Skia" Version="3.6.0" />
 		<PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" Version="7.1.3" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'" />
 	</ItemGroup>
+
+	<ItemGroup>
+	  <None Remove="Platforms\Windows\trayicon.ico" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Content Include="Platforms\Windows\trayicon.ico">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	</ItemGroup>
+
 	<ItemGroup Condition="'$(Configuration)'=='Debug'">
 		<RuntimeHostConfigurationOption Include="MauiReactor.HotReload" Value="true" Trim="false" />
 	</ItemGroup>
@@ -54,6 +70,10 @@
 	</ItemGroup>
 	<ItemGroup>
 	  <Folder Include="Features\GithubCopilot\Components\" />
-	  <Folder Include="Features\Widget\" />
+	  <Folder Include="Features\Widget\Components\" />
+	  <Folder Include="Features\Widget\DeskBand\" />
+	  <Folder Include="Features\Widget\DeskBand\Pages\" />
+	  <Folder Include="Features\Widget\Model\" />
+	  <Folder Include="Platforms\Windows\NativeWindowing\" />
 	</ItemGroup>
 </Project>

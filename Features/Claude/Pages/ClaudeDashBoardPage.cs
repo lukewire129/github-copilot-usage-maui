@@ -340,8 +340,8 @@ partial class ClaudeDashBoardPage : Component<ClaudeDashBoardPageState>
                                 e.Info.Width, e.Info.Height,
                                 strokeWidth: 3.5f * (e.Info.Width / 28f),
                                 percent: pct,
-                                trackColor: DonutRenderer.GetTrackColor(IsDark),
-                                fillColor: DonutRenderer.GetStatusColor(pct, IsDark));
+                                trackColor: DonutRenderer.GetTrackColor(),
+                                fillColor: DonutRenderer.GetStatusColor(pct));
                         }),
                     Label($"{pct:F0}%")
                         .FontSize(20).FontAttributes(MauiControls.FontAttributes.Bold)

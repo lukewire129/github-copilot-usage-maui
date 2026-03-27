@@ -1,4 +1,6 @@
+using copilot_usage_maui.Features.Widget.Pages;
 using copilot_usage_maui.Models;
+using MauiReactor.Integration;
 
 namespace copilot_usage_maui.Services;
 
@@ -12,7 +14,7 @@ public class WidgetService
     /// Deskband에서 강제 새로고침 요청 시 발생
     /// </summary>
     public event Func<Task>? RefreshRequested;
-
+    public Type? WidgetType { get; private set; } = typeof(DeskBandPage);
     public void Update(WidgetData data)
     {
         Current = data;
@@ -20,6 +22,7 @@ public class WidgetService
     }
     // 기존 이벤트 대신 단일 핸들러로 교체
     private Func<Task>? _refreshHandler;
+
 
     public void SetRefreshHandler(Func<Task>? handler)
     {
@@ -32,5 +35,25 @@ public class WidgetService
     {
         if (_refreshHandler is not null)
             await _refreshHandler();
+    }
+
+    public void SetWidgetMode(int mode)
+    {
+        if (mode == 0)
+        {
+            WidgetType = typeof(DeskBandPage);
+        }
+        else if (mode == 1)
+        {
+            WidgetType = typeof(VerticalFloatingPage);
+        }
+        else if (mode == 2)
+        {
+            WidgetType = typeof(HorizontalFloatingPage);
+        }
+        else
+        {
+            WidgetType = null;
+        }
     }
 }

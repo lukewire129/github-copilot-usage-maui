@@ -12,6 +12,8 @@ class AppState
 
 partial class App : Component<AppState>
 {
+    [Inject] ITrayService _trayService;
+
     protected override void OnMounted()
     {
         base.OnMounted();
@@ -20,6 +22,12 @@ partial class App : Component<AppState>
         if (MauiControls.Application.Current != null)
             MauiControls.Application.Current.RequestedThemeChanged += OnThemeChanged;
         SettingsService.LanguageChanged += OnLanguageChanged;
+        _trayService.Initialize();
+
+        _trayService.ClickHandler = () =>
+        {
+
+        };
     }
 
     protected override void OnWillUnmount()

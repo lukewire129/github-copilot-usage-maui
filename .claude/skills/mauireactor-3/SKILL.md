@@ -15,7 +15,7 @@ description: "Develop MauiReactor 3.x applications - a declarative UI component 
 | # | 파일 | 다루는 내용 |
 |---|------|------------|
 | 1 | `references/01-setup.md` | 프로젝트 생성, hot-reload, Program.cs, 패키지 구조 |
-| 2 | `references/02-components.md` | Stateless/Stateful 컴포넌트, Props Class, 생명주기 |
+| 2 | `references/02-components.md` | Stateless/Stateful 컴포넌트, Props Class, 생명주기, **Diffing 메커니즘 & 설계 가이드** |
 | 3 | `references/03-state-management.md` | `[Prop]` / `[Param]` / `[Inject]` 패턴 비교표 + 예제 |
 | 4 | `references/04-animation.md` | WithAnimation() 위치 규칙, AnimationController, easing |
 | 5 | `references/05-layout-fluent.md` | VStack/HStack/Grid/Frame, Fluent API 속성 목록 |
@@ -33,6 +33,7 @@ description: "Develop MauiReactor 3.x applications - a declarative UI component 
 ─────────────────────────────────────────────
 "프로젝트 만들기/설치/hot-reload"  → 01-setup.md
 "컴포넌트 만드는 법/생명주기"      → 02-components.md
+"Diffing/성능/Stateful 배치"      → 02-components.md  ← 설계 시 필수!
 "Prop vs Param 뭐 써야 해?"       → 03-state-management.md  ← 자주 혼동!
 "애니메이션 안 됨/위치 오류"       → 04-animation.md
 "VStack/Grid 레이아웃"             → 05-layout-fluent.md
